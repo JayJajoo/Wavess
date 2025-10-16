@@ -206,6 +206,7 @@ Tests include 8 tricky title parsing cases:
 
 ```
 linkedin-intelligence-system/
+├── Task1.csv            # Task1 csv file
 ├── partA.py            # Part A: Audience scoring
 ├── partB.py            # Part B: Post performance
 ├── main.py             # Main orchestrator
