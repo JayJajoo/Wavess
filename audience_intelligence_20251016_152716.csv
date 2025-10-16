@@ -1,0 +1,88 @@
+name,title,company,role_function,seniority,company_type,geo,score,score_reason,excluded
+Freddie Catlow,Carbon is life | Biochar is the bridge | CEO at Planboo,Planboo,climate,c_level,climate_tech,unknown,90,Function+Seniority+CompanyType+Keywords(+5),False
+Freddie O'Shea,Head of Marketing || Driving Climate Innovation at Blue Earth,Blue Earth,climate,director,climate_tech,unknown,90,Function+Seniority+CompanyType+Keywords(+5),False
+Alexander Farsan,Head of Climate and Environment at Klarna,Klarna,climate,director,fintech,unknown,90,Function+Seniority+CompanyType+Keywords(+5),False
+Jörgen Johnsson,Founder and CEO at Johnson Real Estate Venture INC,Johnson Real Estate Venture INC,executive,c_level,finance,unknown,85,Function+Seniority+CompanyType,False
+Oskar Strandqvist,Head of Partner AML Risk at Klarna,Klarna,risk,director,fintech,unknown,85,Function+Seniority+CompanyType,False
+Vy Do,Sustainability Strategy & Digital Transformation | Leveraging AI & Automation for Climate Impact | MSc Sustainability Leadership - Let's Connect!,Unknown,climate,manager,climate_tech,north_america,80,Function+Seniority(near)+CompanyType+Keywords(+10),False
+Rob Sherwood,1st Line Risk Manager - Klarna UK,Unknown,risk,manager,fintech,europe,80,Function+Seniority(near)+CompanyType+Geo,False
+Sofia Lindelöw,Managing Director Nordics at Norrsken Foundation,Norrsken Foundation,executive,c_level,other,nordics,75,Function+Seniority+Geo,False
+Shruti Priya,"Executive Tech & Global Legal Leader | Legal Strategy, Compliance, & Governance for Fortune 100s & High-Tech Scale-Ups | $1B+ Revenue Impact",Unknown,climate,manager,enterprise,unknown,70,Function+Seniority(near)+CompanyType,False
+Gilad Kilchevsky,Accounting Manager at Klarna,Klarna,finance,manager,fintech,unknown,70,Function+Seniority(near)+CompanyType,False
+Peter Githinji,"Climate Finance & Carbon Markets Strategist | Co-Founder, KiotaSIC | Accelerating Sustainable Innovation & Economic Opportunity in East Africa.",Unknown,climate,mid,climate_tech,north_america,70,Function+CompanyType+Keywords(+10),False
+Alexandra Colac,"Sustainability, Circularity, Social and Environmental Impact in Value Chains",Unknown,climate,mid,climate_tech,north_america,70,Function+CompanyType+Keywords(+10),False
+Salah Said,Sustainability I ESG I Corporate Responsibility at Klarna I ex-Zalando | Social Innovation & Entrepreneurship | Design Thinking | BMI | LSP | Sustainable Fashion / Finance / E-commerce | Carbon Removal,Klarna I ex-Zalando,climate,mid,fintech,north_america,70,Function+CompanyType+Keywords(+10),False
+Marco Maranzano,Founder & CEO at MFM Search LLC - marco.maranzano@mfmsearch.com,mfmsearch.com,executive,c_level,startup,apac,65,Function+Seniority,False
+Mathias Wikström,CEO at Doconomy,Doconomy,executive,c_level,other,unknown,65,Function+Seniority,False
+Colin Creagh,"Head of Klarna, Ireland | GTM expert | ex eBay | MBA",Unknown,sales,director,fintech,unknown,65,Function(partial)+Seniority+CompanyType,False
+Lucy Scurrah,Head of Global B2B Marketing at Klarna,Klarna,marketing,director,fintech,unknown,65,Function(partial)+Seniority+CompanyType,False
+Anna Samuelsson,Head of Impact at Milkywire,Milkywire,climate,director,other,unknown,65,Function+Seniority,False
+Katarina Wangler Björk,"IMAGINE Leader | Climate, Sustain Tech & Policy | Sustainable Business Innovation Transformation & Finance | Ex-EY | MBA",Unknown,climate,manager,consulting,north_america,65,Function+Seniority(near)+CompanyType(adjacent)+Keywords(+5),False
+Dhanesh Kothari,"Compassionate Capitalism | Founder of pi2Life - Funder, B2B Marketplace, Product Locator, Shopical | Ethics | Entrepreneur | Mentor | Board Advisor | Sustainability | Impact | VeganTech | FinTech | RetailTech | Digital",Unknown,climate,mid,fintech,north_america,65,Function+CompanyType+Keywords(+5),False
+Fredrik Andersson Guldkula,Climate tech investor @ R-evolution (Hexagon AB),R-evolution (Hexagon AB),climate,mid,climate_tech,unknown,65,Function+CompanyType+Keywords(+5),False
+Anders Norlin,Venture Builder | Strategic Advisor | Board Executive | Investor | 💚 Impact°Nature°Climate°Tech | 💙💛🇺🇦,Unknown,climate,mid,finance,unknown,65,Function+CompanyType+Keywords(+5),False
+"Emma Heikensten, Phd",Sustainability | Investment | Thematic equity research | Women's empowerment advocate,Unknown,climate,mid,finance,north_america,65,Function+CompanyType+Keywords(+5),False
+Cristina Alvarez,Consumer PR and Communications Manager South Europe at Klarna,Klarna,marketing,manager,fintech,europe,60,Function(partial)+Seniority(near)+CompanyType+Geo,False
+Benedetta Pavesi,Climate Policy & Carbon Finance | ex-McKinsey,Unknown,climate,mid,consulting,unknown,60,Function+CompanyType(adjacent)+Keywords(+10),False
+"Andrew Sangjun, Rhee PhD","Consultant | Ethnography Empirical Market Reserach; Social Finance, Decarbonization, Responsible AI | PhD | PwC",Unknown,climate,mid,consulting,unknown,55,Function+CompanyType(adjacent)+Keywords(+5),False
+Christof M.,Business Development Manager @Klarna,Klarna,sales,manager,fintech,north_america,50,Function(partial)+Seniority(near)+CompanyType,False
+Bruno Miguel Pereira Pessoa,Key Account Manager at Oney Portugal,Oney Portugal,sales,manager,consulting,europe,50,Function(partial)+Seniority(near)+CompanyType(adjacent)+Geo,False
+Manuel Poot,Passionate Sales Leader 🚀 | Driving Revenue Growth Through Strategic Credit Management Solutions | Expert in Client Success and Long-Term Partnerships with Multinational organisations,Unknown,sales,manager,enterprise,unknown,50,Function(partial)+Seniority(near)+CompanyType,False
+Petter William Sundelin,Senior Product Marketing Manager på Klarna,Klarna,marketing,manager,fintech,unknown,50,Function(partial)+Seniority(near)+CompanyType,False
+Sara Simmonds,"#1 Business Growth Expert for Purpose Led Founders | Scale to $1M, $50M and beyond as a Category Of One business | Creator of Impact Innovator Mastermind | $200M+ in revenue for values-driven businesses",Unknown,climate,mid,consulting,north_america,50,Function+CompanyType(adjacent),False
+Joni Roberts,Chief Marketing Officer & SVP I Mentor I Advocate I Passionate Executive I Author,Unknown,marketing,c_level,other,unknown,45,Function(partial)+Seniority,False
+Rebecca Jerndahl Tepavac,Director | Head of Brand & Creative,Unknown,marketing,c_level,other,unknown,45,Function(partial)+Seniority,False
+Omar Ajruli,CEO at AJR.Agency | Silicon Valley-grade Eastern European engineers on your Slack in 48h,AJR.Agency,technology,c_level,consulting,europe,45,Seniority+CompanyType(adjacent)+Geo,False
+Gary Rohloff,"Head of ANZ, Klarna",Unknown,general,director,fintech,apac,45,Seniority+CompanyType,False
+Blake Downey,Head of Partner Success @ Klarna,Klarna,general,director,fintech,unknown,45,Seniority+CompanyType,False
+Alexandre Fernandes Ribeiro,Country Manager Spain & Portugal at Klarna | Forbes 30 Under 30,Klarna,technology,manager,fintech,europe,40,Seniority(near)+CompanyType+Geo,False
+Deqa Abukar,"Co-founder BLING, Investor",Unknown,executive,mid,startup,unknown,40,Function,False
+Jill Raval,Nature Finance & Regenerative Agriculture,Unknown,finance,mid,other,unknown,40,Function,False
+Marc-André Alexandre,Business Development @ Klarna | Athletic Recruiting Consultant | Black Wealth Club,Klarna,sales,mid,fintech,north_america,40,Function(partial)+CompanyType,False
+Chris Barnett,Global Sales Strategy @ Klarna | Business Development Expert,Klarna,sales,mid,fintech,north_america,40,Function(partial)+CompanyType,False
+Deepkaran Singh Ahuja,Tech aficionado | Let me help you in enhancing your customer experience journey!,Unknown,technology,c_level,consulting,north_america,35,Seniority+CompanyType(adjacent),False
+Luisa Betanzos,Operations Team Manager / Conference Planner / Account Executive,Unknown,sales,manager,other,unknown,30,Function(partial)+Seniority(near),False
+Francesca Barbazeni,Engineering Manager @ Klarna,Klarna,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Ellen Bugge,"Events & Marketing Manager, APAC & NCE",Unknown,marketing,manager,other,apac,30,Function(partial)+Seniority(near),False
+Suzi McGoldrick,Account Manager - Blue Earth,Unknown,sales,manager,other,unknown,30,Function(partial)+Seniority(near),False
+Esref Ozturk,Lead Engineer at Klarna,Klarna,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Praveen Pandey,Senior IT Manager at Klarna || ITIL Certified || Cloud & Infrastructure Services || Data Center Operations,Klarna,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Zuzanna Kiniewicz,Senior Marketing Manager,Unknown,marketing,manager,other,unknown,30,Function(partial)+Seniority(near),False
+Sebastian Steinke,Engineering Manager at Klarna,Klarna,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Catherine Sierra,Delivery Manager @ Klarna | MBA | MSc in Big Data and Business Analytics,Klarna,technology,manager,fintech,north_america,30,Seniority(near)+CompanyType,False
+Tommy Wallberg,Lead Developer | Platform Engineer at Klarna,Klarna,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Ivy Chiang,Project Manager - Data Modeling & AI | Klarna,Unknown,technology,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Baz Bignell,Partnerships Lead - Blue Earth Summit,Unknown,sales,manager,other,unknown,30,Function(partial)+Seniority(near),False
+Josefin Toomson,Bid Manager at Klarna,Klarna,general,manager,fintech,unknown,30,Seniority(near)+CompanyType,False
+Tove Thaning,Public Policy & Government Relations at Klarna. MS in European Affairs - Lund University,Klarna. MS in European Affairs - Lund University,technology,mid,fintech,europe,30,CompanyType+Geo,False
+Giacomo Meloni,Senior Software Engineer @ Klarna | Applied AI,Klarna,technology,senior,fintech,unknown,20,CompanyType,False
+Francesco Filippi,Senior Software Engineer @ Klarna,Klarna,technology,senior,fintech,unknown,20,CompanyType,False
+Tori Galloso May,"Helping Cloud ISVs & GSIs to Craft Joint Value Propositions | GTM with AWS, Azure & GCP Hyperscalers ☁️ | Strategic Alliances | Partner Experience",Unknown,marketing,mid,other,unknown,20,Function(partial),False
+Arina Timofeeva,Business Operations Specialist at Klarna,Klarna,operations,mid,fintech,north_america,20,CompanyType,False
+"Wayne Marcus, MBA",Business Development | National Account Management | Project Management,Unknown,marketing,mid,other,north_america,20,Function(partial),False
+Fani Kogketsidou,Quality Assurance Analyst for Global Complaints,Unknown,technology,mid,enterprise,unknown,20,CompanyType,False
+Francesca Pavan,Marketing @Legora,Legora,marketing,mid,other,unknown,20,Function(partial),False
+Lika (Lisa) Walker,Marketing & Sales Strategy | Product & Content Marketing,Unknown,marketing,mid,other,unknown,20,Function(partial),False
+Patrick Ingemann Broberg,Business Controller at HDI Global,HDI Global,general,mid,enterprise,north_america,20,CompanyType,False
+Arina Lopukhina,Business Analytics @PayPal | MSc. Data Science @UniMi,PayPal,technology,mid,fintech,north_america,20,CompanyType,False
+Marie Dahl,Partner Success Lead @Milkywire,Milkywire,general,manager,other,unknown,10,Seniority(near),False
+Marco Stoppa,Lead Engineer,Unknown,technology,manager,other,unknown,10,Seniority(near),False
+📨 Glauco P.,Engineering Manager,Unknown,technology,manager,other,unknown,10,Seniority(near),False
+Diego Bardari,Software Architect | Designing software with agile mindset and servant leadership,Unknown,technology,manager,other,unknown,10,Seniority(near),False
+Paris Patsogiannis,Business Intelligence Engineer @ IBM | MEng in Applied Mathematics,IBM,technology,mid,tech,north_america,10,CompanyType(adjacent),False
+Piotr Bojnowski,Senior Software Engineer,Unknown,technology,senior,other,unknown,0,NoMatch,False
+Jay Jajoo,GenAI Engineer | Data Science Graduate Student @Northeastern | Data Engineer | ML Enthusiast | AI | Big Data | Cloud | NLP | Web Developer,Northeastern,technology,mid,other,north_america,0,NoMatch,False
+Vanessa Sforza,CRM & Marketing Automation Consultant | Progetto strategie data-driven per far crescere il valore dei tuoi clienti,Unknown,technology,mid,other,unknown,0,NoMatch,False
+Olga Birmpa,Hellenic Statistical Authority (ELSTAT),Unknown,general,mid,other,unknown,0,NoMatch,False
+Jan Martens,Software Engineer at Web Computing,Web Computing,technology,mid,other,unknown,0,NoMatch,False
+Birgitta Langenskiöld,Hanken&SSE EMBA23 graduate. Investor,Unknown,general,mid,other,unknown,0,NoMatch,False
+Alicia Mireya Daza Castillo,Software Engineer,Unknown,technology,mid,other,unknown,0,NoMatch,False
+Ernst H.,Unterschiede sehen Virtual oder Real,Unknown,general,mid,other,unknown,0,NoMatch,False
+Nathaniel Burola,AI & Environment Research Consultant | Master of Tech Policy (MTP) Student at the RAND School of Public Policy | Fellow at The Digital Economist,the RAND School of Public Policy,technology,mid,other,unknown,0,NoMatch,False
+Patricia Tang,Go-To-Market | Technical Delivery l Project Management l Retail l Operations,Unknown,technology,mid,other,unknown,0,NoMatch,False
+András László Tölgyes,"""Tell me how you read and I'll tell you who you are."" | Iratkozz fel a STALKER-re!",Unknown,general,mid,other,unknown,0,NoMatch,False
+Ricardo Parra,Digital Marketing | Data Science | Product Management | Strategic Marketing | Consulting,Unknown,technology,mid,other,unknown,0,NoMatch,False
+Thanaphoom Babparn,Product-Minded Software Engineer,Unknown,technology,mid,other,unknown,0,NoMatch,False
+Tara Patterson,Digital Merchandising Strategist | E-commerce Optimization | Customer Experience Advocate | 10+ Years in Retail & Site Strategy,Unknown,technology,mid,other,north_america,0,NoMatch,False
+Eleonor Larsson,People @ Qliro,Qliro,hr,mid,other,unknown,0,NoMatch,False
+"Mike Alves, MSAFP, CFP®, CEPA, CRPC®",Founder & Managing Partner | Late-Stage Pre-IPO AI & Humanoid Robotics Fund | Investing in Innovation & Future Tech with No Management Fees | Building a Legacy for the Next Generation,Unknown,technology,mid,finance,unknown,-100,Excluded,True

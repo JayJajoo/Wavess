@@ -1,0 +1,20 @@
+{
+  "word_count": 209,
+  "char_count": 1381,
+  "has_question": false,
+  "question_count": 0,
+  "hashtag_count": 0,
+  "emoji_count": 4,
+  "has_external_link": true,
+  "link_count": 1,
+  "has_line_breaks": true,
+  "paragraph_count": 9,
+  "has_call_to_action": true,
+  "mentions_count": 0,
+  "all_caps_words": 0,
+  "exclamation_count": 1,
+  "post_length_category": "long",
+  "predicted_performance": "underperform",
+  "performance_score": 45,
+  "performance_reason": "GoodLength+HasCTA+ManyEmojis+HasLink+EngagementWords"
+}

@@ -1,0 +1,14 @@
+name,title,company,role_function,seniority,score,outreach_priority,score_reason
+Freddie Catlow,Carbon is life | Biochar is the bridge | CEO at Planboo,Planboo,climate,c_level,90,HIGH,Function+Seniority+CompanyType+Keywords(+5)
+Freddie O'Shea,Head of Marketing || Driving Climate Innovation at Blue Earth,Blue Earth,climate,director,90,MEDIUM,Function+Seniority+CompanyType+Keywords(+5)
+Alexander Farsan,Head of Climate and Environment at Klarna,Klarna,climate,director,90,MEDIUM,Function+Seniority+CompanyType+Keywords(+5)
+Jörgen Johnsson,Founder and CEO at Johnson Real Estate Venture INC,Johnson Real Estate Venture INC,executive,c_level,85,HIGH,Function+Seniority+CompanyType
+Oskar Strandqvist,Head of Partner AML Risk at Klarna,Klarna,risk,director,85,MEDIUM,Function+Seniority+CompanyType
+Vy Do,Sustainability Strategy & Digital Transformation | Leveraging AI & Automation for Climate Impact | MSc Sustainability Leadership - Let's Connect!,Unknown,climate,manager,80,LOW,Function+Seniority(near)+CompanyType+Keywords(+10)
+Rob Sherwood,1st Line Risk Manager - Klarna UK,Unknown,risk,manager,80,LOW,Function+Seniority(near)+CompanyType+Geo
+Sofia Lindelöw,Managing Director Nordics at Norrsken Foundation,Norrsken Foundation,executive,c_level,75,HIGH,Function+Seniority+Geo
+Shruti Priya,"Executive Tech & Global Legal Leader | Legal Strategy, Compliance, & Governance for Fortune 100s & High-Tech Scale-Ups | $1B+ Revenue Impact",Unknown,climate,manager,70,LOW,Function+Seniority(near)+CompanyType
+Gilad Kilchevsky,Accounting Manager at Klarna,Klarna,finance,manager,70,LOW,Function+Seniority(near)+CompanyType
+Peter Githinji,"Climate Finance & Carbon Markets Strategist | Co-Founder, KiotaSIC | Accelerating Sustainable Innovation & Economic Opportunity in East Africa.",Unknown,climate,mid,70,LOW,Function+CompanyType+Keywords(+10)
+Alexandra Colac,"Sustainability, Circularity, Social and Environmental Impact in Value Chains",Unknown,climate,mid,70,LOW,Function+CompanyType+Keywords(+10)
+Salah Said,Sustainability I ESG I Corporate Responsibility at Klarna I ex-Zalando | Social Innovation & Entrepreneurship | Design Thinking | BMI | LSP | Sustainable Fashion / Finance / E-commerce | Carbon Removal,Klarna I ex-Zalando,climate,mid,70,LOW,Function+CompanyType+Keywords(+10)

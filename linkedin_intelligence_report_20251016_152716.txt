@@ -1,0 +1,133 @@
+================================================================================
+LINKEDIN AUDIENCE INTELLIGENCE & POST PERFORMANCE REPORT
+================================================================================
+
+Generated: 2025-10-16 15:27:16
+
+================================================================================
+POST PERFORMANCE ANALYSIS
+================================================================================
+
+Performance Prediction: UNDERPERFORM
+Performance Score: 45/100
+Score Factors: GoodLength+HasCTA+ManyEmojis+HasLink+EngagementWords
+
+Feature Summary:
+  - Word count: 209
+  - Has question: False
+  - Hashtags: 0
+  - Emojis: 4
+  - External link: True
+  - Call to action: True
+
+
+RECOMMENDATIONS:
+• Add 3-5 relevant hashtags to increase discoverability
+• Add a question to boost engagement (e.g., 'What's your experience?')
+• Reduce emojis to 1-3 for professional tone
+
+================================================================================
+AUDIENCE INTELLIGENCE ANALYSIS
+================================================================================
+
+Total profiles analyzed: 87
+Valid profiles: 86
+Excluded profiles: 1
+
+Average relevance score: 37.6/100
+High-value profiles (>=70): 13 (15.1%)
+
+Top Functions:
+  - technology: 29 (33.7%)
+  - climate: 17 (19.8%)
+  - marketing: 11 (12.8%)
+  - general: 9 (10.5%)
+  - sales: 9 (10.5%)
+
+Seniority Distribution:
+  - mid: 38 (44.2%)
+  - manager: 28 (32.6%)
+  - c_level: 9 (10.5%)
+  - director: 8 (9.3%)
+  - senior: 3 (3.5%)
+
+Geography Distribution:
+  - unknown: 56 (65.1%)
+  - north_america: 20 (23.3%)
+  - europe: 6 (7.0%)
+  - apac: 3 (3.5%)
+  - nordics: 1 (1.2%)
+
+================================================================================
+TOP 10 HIGHEST-VALUE PROSPECTS
+================================================================================
+
+75. Freddie Catlow (Score: 90)
+   Carbon is life | Biochar is the bridge | CEO at Planboo
+   c_level | climate | climate_tech | unknown
+   Reason: Function+Seniority+CompanyType+Keywords(+5)
+
+15. Freddie O'Shea (Score: 90)
+   Head of Marketing || Driving Climate Innovation at Blue Earth
+   director | climate | climate_tech | unknown
+   Reason: Function+Seniority+CompanyType+Keywords(+5)
+
+85. Alexander Farsan (Score: 90)
+   Head of Climate and Environment at Klarna
+   director | climate | fintech | unknown
+   Reason: Function+Seniority+CompanyType+Keywords(+5)
+
+57. Jörgen Johnsson (Score: 85)
+   Founder and CEO at Johnson Real Estate Venture INC
+   c_level | executive | finance | unknown
+   Reason: Function+Seniority+CompanyType
+
+32. Oskar Strandqvist (Score: 85)
+   Head of Partner AML Risk at Klarna
+   director | risk | fintech | unknown
+   Reason: Function+Seniority+CompanyType
+
+66. Vy Do (Score: 80)
+   Sustainability Strategy & Digital Transformation | Leveraging AI & Automation for Climate Impact | MSc Sustainability Leadership - Let's Connect!
+   manager | climate | climate_tech | north_america
+   Reason: Function+Seniority(near)+CompanyType+Keywords(+10)
+
+67. Rob Sherwood (Score: 80)
+   1st Line Risk Manager - Klarna UK
+   manager | risk | fintech | europe
+   Reason: Function+Seniority(near)+CompanyType+Geo
+
+29. Sofia Lindelöw (Score: 75)
+   Managing Director Nordics at Norrsken Foundation
+   c_level | executive | other | nordics
+   Reason: Function+Seniority+Geo
+
+3. Shruti Priya (Score: 70)
+   Executive Tech & Global Legal Leader | Legal Strategy, Compliance, & Governance for Fortune 100s & High-Tech Scale-Ups | $1B+ Revenue Impact
+   manager | climate | enterprise | unknown
+   Reason: Function+Seniority(near)+CompanyType
+
+40. Gilad Kilchevsky (Score: 70)
+   Accounting Manager at Klarna
+   manager | finance | fintech | unknown
+   Reason: Function+Seniority(near)+CompanyType
+
+
+================================================================================
+STRATEGIC INSIGHTS & RECOMMENDATIONS
+================================================================================
+
+Post-Audience Alignment:
+MODERATE alignment: 15.1% high-value audience
+   Consider refining targeting or post theme.
+
+Content Optimization Priority:
+  Focus on improving post structure to increase reach.
+  Higher reach = more potential ICP engagement.
+
+Engagement Strategy:
+  Priority functions: technology, climate, marketing
+  - Engage directly with C-level and VP profiles
+  - Create follow-up content for these functions
+  - Consider targeted ads to similar profiles
+
