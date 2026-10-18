@@ -29,7 +29,7 @@ struct ReelBuilder {
         let naturalSize: CGSize
     }
 
-    func build(segments: [ReelSegment], transitionDuration: Double) async throws -> (composition: AVComposition, videoComposition: AVVideoComposition) {
+    func build(segments: [ReelSegment], transitionDuration: Double, transition: ReelTransition = .crossDissolve) async throws -> (composition: AVComposition, videoComposition: AVVideoComposition) {
         guard !segments.isEmpty else { throw EditorError.nothingToExport }
 
         // Load each distinct source's video track + orientation once.
@@ -127,13 +127,14 @@ struct ReelBuilder {
                 let range = CMTimeRange(start: starts[i + 1], duration: overlaps[i])
                 let nextTrack = tracks[(i + 1) % 2]
 
-                // Outgoing in front, fading out; incoming behind at full opacity.
                 let fromLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-                fromLayer.setTransform(transforms[i], at: range.start)
-                fromLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: range)
-
                 let toLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: nextTrack)
-                toLayer.setTransform(transforms[i + 1], at: range.start)
+                TransitionCompositor.apply(
+                    transition,
+                    from: fromLayer, to: toLayer,
+                    fromTransform: transforms[i], toTransform: transforms[i + 1],
+                    range: range, renderSize: renderSize
+                )
 
                 let instruction = AVMutableVideoCompositionInstruction()
                 instruction.timeRange = range

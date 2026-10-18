@@ -193,7 +193,8 @@ final class ReelViewModel {
             let builder = ReelBuilder()
             let (composition, videoComposition) = try await builder.build(
                 segments: segments,
-                transitionDuration: transition.style == .none ? 0 : transition.duration
+                transitionDuration: transition.style == .none ? 0 : transition.duration,
+                transition: transition.style.effect ?? .crossDissolve
             )
             let url = try await VideoComposer().export(composition, videoComposition: videoComposition) { [weak self] value in
                 Task { @MainActor in self?.progress = Double(value) }
@@ -219,6 +220,7 @@ final class ReelViewModel {
                 slots: plan.slots,
                 transitionIntoNext: plan.transitions,
                 transitionDuration: transition.style == .none ? 0 : transition.duration,
+                transition: transition.style.effect ?? .crossDissolve,
                 music: (musicAsset, musicStart)
             )
             let url = try await VideoComposer().export(composition, videoComposition: videoComposition, audioMix: audioMix) { [weak self] value in

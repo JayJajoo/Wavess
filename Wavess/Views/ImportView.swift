@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// The home screen. Offers two entry points: edit a single clip, or build a
-/// reel from several clips.
+/// The home screen. Entry point into the reel builder.
 struct ImportView: View {
-    var onChooseSingle: () -> Void
     var onChooseReel: () -> Void
 
     var body: some View {
@@ -29,16 +27,9 @@ struct ImportView: View {
                     ActionCard(
                         icon: "sparkles.rectangle.stack",
                         title: "Build a Reel",
-                        detail: "Combine several clips (e.g. drives & scenery) — Wavess picks the key scenes from each and stitches them with transitions.",
+                        detail: "Pick several clips in the order you want them — Wavess finds the key scenes, syncs the cuts to your music, and stitches it all with transitions.",
                         prominent: true,
                         action: onChooseReel
-                    )
-                    ActionCard(
-                        icon: "scissors",
-                        title: "Edit one clip",
-                        detail: "Trim still/boring stretches or pull the highlights out of a single video.",
-                        prominent: false,
-                        action: onChooseSingle
                     )
                 }
                 .padding(.horizontal, 20)
@@ -115,5 +106,5 @@ private struct FeatureRow: View {
 }
 
 #Preview {
-    ImportView(onChooseSingle: {}, onChooseReel: {})
+    ImportView(onChooseReel: {})
 }

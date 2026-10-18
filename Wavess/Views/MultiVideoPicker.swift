@@ -12,6 +12,7 @@ struct MultiVideoPicker: UIViewControllerRepresentable {
         var config = PHPickerConfiguration()
         config.filter = .videos
         config.selectionLimit = 0  // unlimited
+        config.selection = .ordered  // reel follows the order clips are tapped
         config.preferredAssetRepresentationMode = .current
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator

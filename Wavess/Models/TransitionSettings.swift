@@ -5,8 +5,20 @@ struct TransitionSettings: Equatable {
 
     enum Style: String, CaseIterable, Identifiable {
         case crossDissolve = "Dissolve"
-        case none = "Hard cut"
+        case fadeToBlack = "Fade"
+        case slide = "Slide"
+        case none = "Cut"
         var id: String { rawValue }
+
+        /// The rendering effect for this style (nil = a hard cut, no transition).
+        var effect: ReelTransition? {
+            switch self {
+            case .crossDissolve: return .crossDissolve
+            case .fadeToBlack:   return .fadeToBlack
+            case .slide:         return .slide
+            case .none:          return nil
+            }
+        }
     }
 
     /// Where transitions are applied. Scenery reels look best with transitions

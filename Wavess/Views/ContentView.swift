@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// Root view. A simple home screen routes to either the single-clip editor or
-/// the multi-clip reel builder.
+/// Root view. A simple home screen routes into the multi-clip reel builder.
 struct ContentView: View {
-    private enum Screen { case home, editor, reel }
+    private enum Screen { case home, reel }
 
-    @State private var editor = EditorViewModel()
     @State private var reel = ReelViewModel()
     @State private var screen: Screen = .home
 
-    @State private var showSinglePicker = false
     @State private var showReelPicker = false
     @State private var pickerError: String?
 
@@ -18,12 +15,7 @@ struct ContentView: View {
             Group {
                 switch screen {
                 case .home:
-                    ImportView(
-                        onChooseSingle: { showSinglePicker = true },
-                        onChooseReel: { showReelPicker = true }
-                    )
-                case .editor:
-                    EditorView(model: editor)
+                    ImportView(onChooseReel: { showReelPicker = true })
                 case .reel:
                     ReelView(model: reel)
                 }
@@ -37,20 +29,6 @@ struct ContentView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showSinglePicker) {
-            VideoPicker(
-                onPick: { url in
-                    showSinglePicker = false
-                    screen = .editor
-                    Task { await editor.load(url: url) }
-                },
-                onError: { message in
-                    showSinglePicker = false
-                    pickerError = message
-                }
-            )
-            .ignoresSafeArea()
         }
         .sheet(isPresented: $showReelPicker) {
             MultiVideoPicker(
@@ -78,14 +56,12 @@ struct ContentView: View {
 
     private var title: String {
         switch screen {
-        case .home:   return "Wavess"
-        case .editor: return "Edit Clip"
-        case .reel:   return "Build Reel"
+        case .home: return "Wavess"
+        case .reel: return "Build Reel"
         }
     }
 
     private func goHome() {
-        editor.reset()
         reel.reset()
         screen = .home
     }

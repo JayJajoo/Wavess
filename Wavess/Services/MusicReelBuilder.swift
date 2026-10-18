@@ -38,6 +38,7 @@ struct MusicReelBuilder {
         slots: [MusicSlot],
         transitionIntoNext: [Bool],
         transitionDuration: Double,
+        transition: ReelTransition = .crossDissolve,
         music: (asset: AVURLAsset, start: Double)
     ) async throws -> (composition: AVComposition, videoComposition: AVVideoComposition, audioMix: AVAudioMix?) {
         guard slots.count >= 1, cutTimes.count == slots.count + 1 else {
@@ -190,11 +191,13 @@ struct MusicReelBuilder {
                 instruction.layerInstructions = [layer]
             case .transition(let j):
                 let fromLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[j % 2])
-                fromLayer.setTransform(transforms[j], at: range.start)
-                fromLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: range)
-
                 let toLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[(j + 1) % 2])
-                toLayer.setTransform(transforms[j + 1], at: range.start)
+                TransitionCompositor.apply(
+                    transition,
+                    from: fromLayer, to: toLayer,
+                    fromTransform: transforms[j], toTransform: transforms[j + 1],
+                    range: range, renderSize: renderSize
+                )
                 instruction.layerInstructions = [fromLayer, toLayer]
             }
             instructions.append(instruction)
