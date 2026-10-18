@@ -153,7 +153,8 @@ final class ReelViewModel {
 
             selectKeyScenes(&scenes, duration: duration.seconds, fraction: transition.perClipFraction)
 
-            loaded.append(ReelClip(url: clipURL, asset: asset, duration: duration.seconds, scenes: scenes))
+            let thumbnail = await ThumbnailMaker.make(asset: asset)
+            loaded.append(ReelClip(url: clipURL, asset: asset, duration: duration.seconds, scenes: scenes, thumbnail: thumbnail))
         }
 
         clips = loaded
@@ -192,6 +193,13 @@ final class ReelViewModel {
         guard let clipIndex = clips.firstIndex(where: { $0.id == clipID }) else { return }
         clips[clipIndex].look = look
         resultURL = nil
+    }
+
+    /// Remove a clip (or photo) from the reel.
+    func removeClip(clipID: UUID) {
+        clips.removeAll { $0.id == clipID }
+        resultURL = nil
+        if clips.isEmpty { phase = .empty }
     }
 
     // MARK: - Export

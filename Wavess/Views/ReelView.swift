@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 /// The reel-builder screen: shows each imported clip's key scenes, transition
 /// controls, and export. Stitches key scenes from multiple videos into one reel.
@@ -9,6 +10,7 @@ struct ReelView: View {
     @State private var showSavedConfirmation = false
     @State private var isSaving = false
     @State private var showAudioPicker = false
+    @State private var playingClip: ReelClip?
 
     var body: some View {
         ScrollView {
@@ -30,6 +32,8 @@ struct ReelView: View {
                     if model.phase == .done, let url = model.resultURL {
                         resultCard(url: url)
                     }
+                } else {
+                    emptyClipsCard
                 }
             }
             .padding(.horizontal)
@@ -60,6 +64,24 @@ struct ReelView: View {
                 ShareSheet(items: [url])
             }
         }
+        .sheet(item: $playingClip) { clip in
+            ClipPlayer(url: clip.url)
+        }
+    }
+
+    private var emptyClipsCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "film.stack")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No clips in this reel")
+                .font(.headline)
+            Text("Tap Home to add videos and photos.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     // MARK: - Analyzing
@@ -262,7 +284,51 @@ struct ReelView: View {
     // MARK: - Clips
 
     private func clipCard(_ clip: ReelClip) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Button { playingClip = clip } label: {
+                    ZStack {
+                        if let thumb = clip.thumbnail {
+                            Image(uiImage: thumb)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Rectangle().fill(Color.secondary.opacity(0.2))
+                        }
+                        Image(systemName: "play.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .shadow(radius: 2)
+                    }
+                    .frame(width: 54, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(clip.fileName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(Formatting.timecode(clip.duration)) · \(clip.selectedCount)/\(clip.scenes.count) key scenes")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Tap to play")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(role: .destructive) {
+                    model.removeClip(clipID: clip.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+            }
+
             DisclosureGroup {
                 VStack(spacing: 2) {
                     ForEach(clip.scenes) { scene in
@@ -274,18 +340,9 @@ struct ReelView: View {
                 }
                 .padding(.top, 6)
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "film")
-                        .foregroundStyle(Color.accentColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(clip.fileName)
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                        Text("\(Formatting.timecode(clip.duration)) · \(clip.selectedCount)/\(clip.scenes.count) key scenes")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text("Key scenes")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 8) {
@@ -387,5 +444,21 @@ struct ReelView: View {
         .padding()
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+/// Full-screen player used to preview a source clip (or photo still) from the list.
+private struct ClipPlayer: View {
+    let url: URL
+    @State private var player = AVPlayer()
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .ignoresSafeArea()
+            .onAppear {
+                player.replaceCurrentItem(with: AVPlayerItem(url: url))
+                player.play()
+            }
+            .onDisappear { player.pause() }
     }
 }
