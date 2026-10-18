@@ -42,7 +42,10 @@ final class ReelViewModel {
     private(set) var musicFullDuration: Double = 0
     var musicStart: Double = 0
     var musicSectionDuration: Double = 60
-    /// Cut the video every N beats (1 = on every beat, 4 = once per bar-ish).
+    /// When on, the cut pace follows the song's energy — fast cuts in intense
+    /// sections, longer holds in calm ones. When off, `beatsPerCut` is used.
+    var autoPace: Bool = true
+    /// Manual pace: cut every N beats (1 = on every beat, 4 = once per bar-ish).
     var beatsPerCut: Int = 2
     /// Add intelligent slow-mo / fast-forward on selected beats.
     var speedEffectsEnabled = true
@@ -478,10 +481,32 @@ final class ReelViewModel {
         guard !pool.isEmpty else { return nil }
         let maxScore = pool.map(\.score).max() ?? 0
 
-        // Walk the grid, giving each scene a beat span that scales with its
-        // quality: high-scoring shots linger over more beats, filler gets quick
-        // cuts — every cut still lands on a beat (content-aware pacing).
-        let baseline = Double(max(1, beatsPerCut))
+        // Music energy envelope (smoothed onset strength) for Auto pacing:
+        // intense sections cut fast, calm sections hold longer.
+        let smoothed: [Double] = analysis.beatStrengths.indices.map { i in
+            let lo = max(0, i - 2)
+            let hi = min(analysis.beatStrengths.count - 1, i + 2)
+            let slice = analysis.beatStrengths[lo...hi]
+            return slice.reduce(0, +) / Double(slice.count)
+        }
+        let minEnergy = smoothed.min() ?? 0
+        let maxEnergy = smoothed.max() ?? 1
+        func autoBeats(atTime t: Double) -> Double {
+            guard !smoothed.isEmpty, maxEnergy > minEnergy else { return 2 }
+            var nearest = 0
+            var nearestDelta = Double.greatestFiniteMagnitude
+            for (i, beat) in analysis.beats.enumerated() where i < smoothed.count {
+                let delta = abs(beat - t)
+                if delta < nearestDelta { nearestDelta = delta; nearest = i }
+            }
+            let energyNorm = (smoothed[nearest] - minEnergy) / (maxEnergy - minEnergy)  // 0…1
+            return 1 + (1 - energyNorm) * 3                                             // 1 (intense) … 4 (calm)
+        }
+
+        // Walk the grid, giving each scene a beat span driven by the music's
+        // local energy (Auto) or the manual "cut every N beats", then nudged by
+        // the shot's quality — great shots linger, filler cuts quick. Every cut
+        // still lands on a beat.
         var cuts: [Double] = [grid[0]]
         var chosen: [FlatScene] = []
         var cursor = 0
@@ -489,6 +514,7 @@ final class ReelViewModel {
         while cursor < intervals {
             let scene = pool[index % pool.count]
             let norm = maxScore > 0 ? max(0, min(1, scene.score / maxScore)) : 0.5
+            let baseline = autoPace ? autoBeats(atTime: grid[cursor]) : Double(max(1, beatsPerCut))
             let span = max(1, Int((baseline * (0.5 + norm)).rounded()))  // ~0.5x…1.5x baseline
             var next = min(cursor + span, intervals)
             while next < intervals && grid[next] - grid[cursor] < 0.5 { next += 1 }   // keep slots ≥ 0.5s

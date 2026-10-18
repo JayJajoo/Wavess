@@ -191,12 +191,25 @@ struct ReelView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
-                Picker("Cut every", selection: $model.beatsPerCut) {
-                    Text("1 beat").tag(1)
-                    Text("2 beats").tag(2)
-                    Text("4 beats").tag(4)
+                Picker("Cut pace", selection: Binding<Int>(
+                    get: { model.autoPace ? 0 : model.beatsPerCut },
+                    set: {
+                        if $0 == 0 { model.autoPace = true }
+                        else { model.autoPace = false; model.beatsPerCut = $0 }
+                    }
+                )) {
+                    Text("Auto").tag(0)
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                    Text("4").tag(4)
                 }
                 .pickerStyle(.segmented)
+
+                Text(model.autoPace
+                     ? "Cut pace follows the song — fast cuts in the energetic parts, longer holds in the calm parts."
+                     : "Cut every \(model.beatsPerCut) beat\(model.beatsPerCut == 1 ? "" : "s"). Lower = snappier, higher = calmer.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 Toggle("Speed ramps (slow-mo / fast-forward)", isOn: $model.speedEffectsEnabled)
                     .font(.subheadline)
