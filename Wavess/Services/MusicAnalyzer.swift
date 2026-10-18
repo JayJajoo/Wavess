@@ -8,6 +8,12 @@ struct MusicAnalysis {
     /// Onset strength at each beat (normalized `0...1`), aligned with `beats` —
     /// higher means a stronger accent/hit (drops, downbeats).
     let beatStrengths: [Double]
+    /// Smoothed loudness at each beat (normalized `0...1`), aligned with `beats` —
+    /// the song's energy over time (quiet verses low, choruses/drops high).
+    let beatEnergies: [Double]
+    /// Index into `beats` of the detected drop — the biggest sustained jump in
+    /// energy (chorus/drop). `nil` when the song has no clear lift.
+    let dropBeatIndex: Int?
     /// Estimated tempo in beats per minute.
     let bpm: Double
 
@@ -163,7 +169,69 @@ struct MusicAnalyzer {
         }
 
         let bpm = (Double(bestLag) * dt) > 0 ? 60.0 / (Double(bestLag) * dt) : 120
-        return MusicAnalysis(beats: beats, beatStrengths: strengths, bpm: bpm)
+
+        // Song structure: a smoothed loudness envelope per beat, and the drop.
+        let (beatEnergies, dropBeatIndex) = Self.structure(energies: energies, dt: dt, beats: beats)
+
+        return MusicAnalysis(beats: beats, beatStrengths: strengths,
+                             beatEnergies: beatEnergies, dropBeatIndex: dropBeatIndex, bpm: bpm)
+    }
+
+    /// Smoothed, normalized loudness at each beat, plus the drop beat (the biggest
+    /// sustained energy jump) if there's a clear one.
+    private static func structure(energies: [Double], dt: Double, beats: [Double]) -> (energies: [Double], drop: Int?) {
+        guard !energies.isEmpty, !beats.isEmpty else {
+            return (Array(repeating: 0.5, count: beats.count), nil)
+        }
+
+        // ~1s moving average.
+        let window = max(1, Int(1.0 / max(dt, 0.0001)))
+        var smooth = [Double](repeating: 0, count: energies.count)
+        var running = 0.0
+        for i in energies.indices {
+            running += energies[i]
+            if i >= window { running -= energies[i - window] }
+            smooth[i] = running / Double(min(i + 1, window))
+        }
+        let minE = smooth.min() ?? 0
+        let maxE = smooth.max() ?? 1
+        let span = maxE - minE
+        func norm(_ v: Double) -> Double { span > 0 ? (v - minE) / span : 0.5 }
+
+        let beatEnergies = beats.map { time -> Double in
+            let idx = min(smooth.count - 1, max(0, Int(time / max(dt, 0.0001))))
+            return norm(smooth[idx])
+        }
+
+        // Drop = the position with the largest sustained rise (quiet-ish before,
+        // loud after), scanning ~2s windows.
+        let w = max(1, Int(2.0 / max(dt, 0.0001)))
+        var bestRise = 0.0
+        var bestHop: Int?
+        if smooth.count > 2 * w {
+            var n = w
+            let step = max(1, Int(0.1 / max(dt, 0.0001)))
+            while n < smooth.count - w {
+                let before = smooth[(n - w)..<n].reduce(0, +) / Double(w)
+                let after = smooth[n..<(n + w)].reduce(0, +) / Double(w)
+                let rise = norm(after) - norm(before)
+                if rise > bestRise && norm(after) > 0.6 { bestRise = rise; bestHop = n }
+                n += step
+            }
+        }
+
+        var drop: Int?
+        if let hop = bestHop, bestRise > 0.15 {
+            let time = Double(hop) * dt
+            var best = 0
+            var bestDelta = Double.greatestFiniteMagnitude
+            for (i, beat) in beats.enumerated() {
+                let delta = abs(beat - time)
+                if delta < bestDelta { bestDelta = delta; best = i }
+            }
+            drop = best
+        }
+        return (beatEnergies, drop)
     }
 
     private func windowEnergy(_ window: [Float]) -> Double {
@@ -185,6 +253,9 @@ struct MusicAnalyzer {
             beats.append(t)
             t += period
         }
-        return MusicAnalysis(beats: beats, beatStrengths: Array(repeating: 0.5, count: beats.count), bpm: 120)
+        return MusicAnalysis(beats: beats,
+                             beatStrengths: Array(repeating: 0.5, count: beats.count),
+                             beatEnergies: Array(repeating: 0.5, count: beats.count),
+                             dropBeatIndex: nil, bpm: 120)
     }
 }

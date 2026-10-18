@@ -502,25 +502,18 @@ final class ReelViewModel {
             return baseGrid[within] + Double(loop) * section
         }
 
-        // Smoothed energy envelope for Auto pacing (per loop).
-        let smoothed: [Double] = analysis.beatStrengths.indices.map { i in
-            let lo = max(0, i - 2)
-            let hi = min(analysis.beatStrengths.count - 1, i + 2)
-            let slice = analysis.beatStrengths[lo...hi]
-            return slice.reduce(0, +) / Double(slice.count)
-        }
-        let minEnergy = smoothed.min() ?? 0
-        let maxEnergy = smoothed.max() ?? 1
+        // Loudness envelope (0...1 per beat) for Auto pacing: calm verses hold
+        // longer, loud build-ups and choruses cut faster.
+        let energyEnvelope = analysis.beatEnergies
         func autoBeats(sectionTime t: Double) -> Double {
-            guard !smoothed.isEmpty, maxEnergy > minEnergy else { return 2 }
+            guard !energyEnvelope.isEmpty else { return 2 }
             var nearest = 0
             var nearestDelta = Double.greatestFiniteMagnitude
-            for (i, beat) in analysis.beats.enumerated() where i < smoothed.count {
+            for (i, beat) in analysis.beats.enumerated() where i < energyEnvelope.count {
                 let delta = abs(beat - t)
                 if delta < nearestDelta { nearestDelta = delta; nearest = i }
             }
-            let energyNorm = (smoothed[nearest] - minEnergy) / (maxEnergy - minEnergy)
-            return 1 + (1 - energyNorm) * 3
+            return 1 + (1 - energyEnvelope[nearest]) * 3   // loud → ~1 beat/cut, quiet → ~4
         }
 
         // Place EVERY scene, each once: give it a beat span from the music's
@@ -541,6 +534,20 @@ final class ReelViewModel {
         }
         guard cuts.count == chosen.count + 1 else { return nil }
 
+        // Save the best shot for the drop: find the slot that lands on the detected
+        // drop and swap the highest-scoring scene into it (cut hard into it and hold
+        // it in slow-mo below). No-op when the song has no clear drop.
+        var dropSlot: Int?
+        if let dropBeat = analysis.dropBeatIndex, dropBeat < analysis.beats.count {
+            let dropTime = analysis.beats[dropBeat]
+            if let slot = (0..<chosen.count).first(where: { cuts[$0] <= dropTime && dropTime < cuts[$0 + 1] }) {
+                dropSlot = slot
+                if let best = chosen.indices.max(by: { chosen[$0].score < chosen[$1].score }), best != slot {
+                    chosen.swapAt(slot, best)
+                }
+            }
+        }
+
         var slots: [MusicSlot] = chosen.map {
             MusicSlot(asset: $0.asset, sourceStart: $0.start, clipIndex: $0.clipIndex)
         }
@@ -553,7 +560,7 @@ final class ReelViewModel {
             analysis.strength(at: cuts[$0 + 1].truncatingRemainder(dividingBy: section))
         }
         let maxStrength = boundaryStrength.max() ?? 0
-        let transitions: [ReelTransition?] = (0..<slots.count).map { j in
+        var transitions: [ReelTransition?] = (0..<slots.count).map { j in
             guard j < slots.count - 1 else { return nil }
             let crosses = slots[j + 1].clipIndex != slots[j].clipIndex
             if transition.style.isAuto {
@@ -568,6 +575,12 @@ final class ReelViewModel {
 
         if speedEffectsEnabled {
             assignSpeeds(&slots, cuts: cuts, sceneScores: sceneScores, analysis: analysis)
+        }
+
+        // Drop impact: hard cut into the hero shot, and hold it in slow motion.
+        if let slot = dropSlot {
+            if slot > 0 { transitions[slot - 1] = nil }
+            if speedEffectsEnabled { slots[slot].speed = 0.5 }
         }
 
         return MusicPlan(cutTimes: cuts, slots: slots, transitions: transitions)
