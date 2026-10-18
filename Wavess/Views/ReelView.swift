@@ -254,15 +254,17 @@ struct ReelView: View {
             Divider()
 
             LabeledSlider(
-                title: "Key scenes per clip",
+                title: "Moments per clip",
                 value: $model.transition.perClipFraction,
-                range: 0.1 ... 0.8,
+                range: 0.05 ... 1.0,
                 step: 0.05,
-                display: "\(Int(model.transition.perClipFraction * 100))%",
+                display: "\(Int((model.transition.perClipFraction * 100).rounded()))%",
                 onCommit: { model.reselectKeyScenes() }
             )
 
-            Text(transitionHint)
+            Text(model.hasMusic
+                 ? "Auto-set to fit your music — more music keeps more per clip. Drag to override."
+                 : transitionHint)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

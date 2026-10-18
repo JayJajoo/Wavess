@@ -344,7 +344,28 @@ final class ReelViewModel {
             duration: musicSectionDuration
         )
         isAnalyzingMusic = false
+        rebalanceKeyScenesForMusic()
         resultURL = nil
+    }
+
+    /// Sizes how many moments to keep per clip so the whole reel fits the chosen
+    /// music section — instead of a fixed 30%. Longer music ⇒ keep more per clip;
+    /// shorter music ⇒ compress to fewer. Every clip keeps at least one moment.
+    private func rebalanceKeyScenesForMusic() {
+        guard let analysis = musicAnalysis, !clips.isEmpty else { return }
+        let section = musicSectionDuration
+        let internalBeats = analysis.beats.filter { $0 > 0.15 && $0 < section - 0.15 }.count
+        let intervals = max(1, internalBeats + 1)
+        // Average beats per cut: Auto varies ~1–4 (≈2.5), else the manual pace.
+        let averageSpan = autoPace ? 2.5 : Double(max(1, beatsPerCut))
+        let targetMoments = max(1, Int((Double(intervals) / averageSpan).rounded()))
+
+        let totalCandidates = clips.reduce(0) { $0 + $1.scenes.count }
+        guard totalCandidates > 0 else { return }
+
+        // Fraction of each clip's moments to keep so the totals fill the section.
+        transition.perClipFraction = min(1.0, max(0.05, Double(targetMoments) / Double(totalCandidates)))
+        reselectKeyScenes()
     }
 
     func clearMusic() {
