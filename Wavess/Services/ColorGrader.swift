@@ -1,5 +1,5 @@
 import AVFoundation
-import CoreImage
+@preconcurrency import CoreImage
 import Foundation
 
 /// Applies color grading as a second pass over an already-rendered video.

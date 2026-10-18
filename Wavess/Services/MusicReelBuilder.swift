@@ -97,7 +97,7 @@ struct MusicReelBuilder {
             // Amount of source footage to consume for the chosen speed: faster =>
             // more footage compressed into the slot; slower => less, stretched out.
             let speed = max(0.1, slot.speed)
-            var sourceLength = min(targetLength * speed, source.duration)
+            let sourceLength = min(targetLength * speed, source.duration)
 
             var srcStart = slot.sourceStart
             if srcStart < 0 { srcStart = 0 }
