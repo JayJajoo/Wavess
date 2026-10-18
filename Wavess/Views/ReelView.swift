@@ -146,7 +146,7 @@ struct ReelView: View {
 
                 if model.maxMusicStart > 0 {
                     LabeledSlider(
-                        title: "Start",
+                        title: "Start time",
                         value: $model.musicStart,
                         range: 0 ... model.maxMusicStart,
                         step: 1,
@@ -154,13 +154,13 @@ struct ReelView: View {
                         onCommit: { Task { await model.analyzeMusicSection() } }
                     )
                 }
-                if model.maxMusicSectionDuration > model.minMusicSectionDuration {
+                if model.maxMusicEnd > model.minMusicEnd {
                     LabeledSlider(
-                        title: "Section length",
-                        value: $model.musicSectionDuration,
-                        range: model.minMusicSectionDuration ... model.maxMusicSectionDuration,
-                        step: 5,
-                        display: Formatting.timecode(model.musicSectionDuration),
+                        title: "End time",
+                        value: $model.musicEnd,
+                        range: model.minMusicEnd ... model.maxMusicEnd,
+                        step: 1,
+                        display: Formatting.timecode(model.musicEnd),
                         onCommit: { Task { await model.analyzeMusicSection() } }
                     )
                 }

@@ -121,48 +121,11 @@ struct MusicReelBuilder {
             transforms.append(VideoGeometry.fitTransform(natural: source.naturalSize, preferred: source.preferredTransform, into: renderSize))
         }
 
-        // Build contiguous instructions: a solo pass-through per slot, and a
-        // transition centered on each flagged beat boundary.
-        var instructions: [AVMutableVideoCompositionInstruction] = []
-        for j in slots.indices {
-            let track = tracks[j % 2]
-
-            let soloStart = cutTimes[j] + leftExt(j)
-            let soloEnd = cutTimes[j + 1] - rightExt(j)
-            if soloEnd > soloStart {
-                let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-                layer.setTransform(transforms[j], at: TimeRangeMath.time(soloStart))
-
-                let instruction = AVMutableVideoCompositionInstruction()
-                instruction.timeRange = CMTimeRange(start: TimeRangeMath.time(soloStart), end: TimeRangeMath.time(soloEnd))
-                instruction.layerInstructions = [layer]
-                instructions.append(instruction)
-            }
-
-            if j < slots.count - 1, transitionIntoNext[j], dissolve > 0 {
-                let beat = cutTimes[j + 1]
-                let range = CMTimeRange(start: TimeRangeMath.time(beat - half), duration: TimeRangeMath.time(dissolve))
-
-                let fromLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-                fromLayer.setTransform(transforms[j], at: range.start)
-                fromLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: range)
-
-                let toLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[(j + 1) % 2])
-                toLayer.setTransform(transforms[j + 1], at: range.start)
-
-                let instruction = AVMutableVideoCompositionInstruction()
-                instruction.timeRange = range
-                instruction.layerInstructions = [fromLayer, toLayer]
-                instructions.append(instruction)
-            }
-        }
-
-        let videoComposition = AVMutableVideoComposition()
-        videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: frameRate)
-        videoComposition.instructions = instructions
-
-        // Lay the music under the whole reel, with short fades.
+        // Lay the music under the whole reel, with short fades. This is added
+        // before the video instructions are built so `composition.duration`
+        // already reflects the soundtrack when the instruction chain is pinned
+        // to it below — otherwise the video-only length can fall a sub-frame
+        // short of the music and leave an uncovered tail.
         var audioMix: AVAudioMix? = nil
         if let musicTrack = try await music.asset.loadTracks(withMediaType: .audio).first,
            let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
@@ -180,6 +143,67 @@ struct MusicReelBuilder {
             mix.inputParameters = [params]
             audioMix = mix
         }
+
+        // Build the instructions as a single contiguous chain: a solo
+        // pass-through per slot and a transition centered on each flagged beat
+        // boundary. Each segment starts exactly where the previous one ends
+        // (sharing the same CMTime), so the ranges tile [0, duration] with no
+        // gaps. Rounding every boundary independently to the composition
+        // timescale would otherwise leave sub-frame gaps between a transition
+        // and the next solo, making the whole composition invalid
+        // (AVErrorInvalidVideoComposition, -11841).
+        enum Segment {
+            case solo(slot: Int)
+            case transition(from: Int)
+        }
+
+        // Ordered segments with their end boundary.
+        var plan: [(segment: Segment, end: CMTime)] = []
+        for j in slots.indices {
+            let hasTransition = j < slots.count - 1 && transitionIntoNext[j] && dissolve > 0
+            let soloEnd = hasTransition ? cutTimes[j + 1] - half : cutTimes[j + 1]
+            plan.append((.solo(slot: j), TimeRangeMath.time(soloEnd)))
+            if hasTransition {
+                plan.append((.transition(from: j), TimeRangeMath.time(cutTimes[j + 1] + half)))
+            }
+        }
+        // Pin the final boundary to the composition's real duration so the
+        // instructions cover the whole timeline with nothing left uncovered.
+        if !plan.isEmpty {
+            plan[plan.count - 1].end = composition.duration
+        }
+
+        var instructions: [AVMutableVideoCompositionInstruction] = []
+        var cursor = CMTime.zero
+        for step in plan {
+            let end = max(cursor, step.end)   // keep the chain strictly forward
+            let range = CMTimeRange(start: cursor, end: end)
+            cursor = end
+            guard range.duration > .zero else { continue }  // drop empties; chain stays contiguous
+
+            let instruction = AVMutableVideoCompositionInstruction()
+            instruction.timeRange = range
+            switch step.segment {
+            case .solo(let j):
+                let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[j % 2])
+                layer.setTransform(transforms[j], at: range.start)
+                instruction.layerInstructions = [layer]
+            case .transition(let j):
+                let fromLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[j % 2])
+                fromLayer.setTransform(transforms[j], at: range.start)
+                fromLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: range)
+
+                let toLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[(j + 1) % 2])
+                toLayer.setTransform(transforms[j + 1], at: range.start)
+                instruction.layerInstructions = [fromLayer, toLayer]
+            }
+            instructions.append(instruction)
+        }
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.renderSize = renderSize
+        videoComposition.frameDuration = CMTime(value: 1, timescale: frameRate)
+        videoComposition.instructions = instructions
 
         return (composition, videoComposition, audioMix)
     }

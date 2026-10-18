@@ -55,6 +55,19 @@ final class ReelViewModel {
     var maxMusicSectionDuration: Double { min(120, musicFullDuration) }
     var maxMusicStart: Double { max(0, musicFullDuration - musicSectionDuration) }
 
+    /// The chosen section expressed as an end time (start + length). Backs the
+    /// "End time" control; setting it keeps the start fixed and adjusts the
+    /// section length, clamped to the track and the allowed length range.
+    var musicEnd: Double {
+        get { musicStart + musicSectionDuration }
+        set {
+            let clamped = min(max(newValue, minMusicEnd), maxMusicEnd)
+            musicSectionDuration = clamped - musicStart
+        }
+    }
+    var minMusicEnd: Double { musicStart + minMusicSectionDuration }
+    var maxMusicEnd: Double { min(musicFullDuration, musicStart + maxMusicSectionDuration) }
+
     // MARK: State
 
     private(set) var clips: [ReelClip] = []
