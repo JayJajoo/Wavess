@@ -119,6 +119,12 @@ final class ReelViewModel {
 
             let frames = await FrameSampler().sample(asset: asset, total: duration, fps: settings.sampleFPS)
             var scenes = SceneDetector().detectScenes(frames: frames, total: duration, settings: settings)
+
+            // Re-rank scenes by on-device visual quality (aesthetics + saliency),
+            // not just motion, so the best-looking / most meaningful shots win.
+            let contentScores = await VisionSceneScorer().score(asset: asset, scenes: scenes)
+            applyContentScores(&scenes, content: contentScores)
+
             selectKeyScenes(&scenes, duration: duration.seconds, fraction: transition.perClipFraction)
 
             loaded.append(ReelClip(url: url, asset: asset, duration: duration.seconds, scenes: scenes))
@@ -483,6 +489,19 @@ final class ReelViewModel {
             boundary = next
         }
         return spans
+    }
+
+    /// Blends Vision content scores (0...1) with the motion-based scene scores so
+    /// selection is led by visual quality but still rewards dynamic, longer shots.
+    /// If Vision produced nothing (older OS or a failure), scores are left as-is.
+    private func applyContentScores(_ scenes: inout [Scene], content: [Double]) {
+        guard scenes.count == content.count,
+              let maxContent = content.max(), maxContent > 0.0001 else { return }
+        let maxMotion = scenes.map(\.score).max() ?? 0
+        for i in scenes.indices {
+            let motion = maxMotion > 0 ? scenes[i].score / maxMotion : 0   // 0...1, duration-aware
+            scenes[i].score = 0.6 * content[i] + 0.4 * motion
+        }
     }
 
     private func selectKeyScenes(_ scenes: inout [Scene], duration: Double, fraction: Double) {
