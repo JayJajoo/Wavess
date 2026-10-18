@@ -30,28 +30,43 @@ struct SceneDetector {
 
         let boundaries = Array(Set(cutTimes)).sorted()
 
+        // Longest a candidate scene may be. A continuous single-shot clip has no
+        // internal cuts, so it would otherwise be one scene spanning the whole
+        // video; splitting long shots into sub-scenes lets highlight selection
+        // pick the best *moments* instead of keeping the entire clip.
+        let maxSceneLength = 3.5
+
         var scenes: [Scene] = []
         for i in 0..<(boundaries.count - 1) {
-            let startSeconds = boundaries[i]
-            let endSeconds = boundaries[i + 1]
-            guard endSeconds > startSeconds else { continue }
+            let shotStart = boundaries[i]
+            let shotEnd = boundaries[i + 1]
+            guard shotEnd > shotStart else { continue }
 
-            // Average visual motion within the scene.
-            let inside = series.filter { $0.time > startSeconds && $0.time <= endSeconds }
-            let meanMotion = inside.isEmpty ? 0 : inside.map(\.motion).reduce(0, +) / Double(inside.count)
+            let shotLength = shotEnd - shotStart
+            let parts = max(1, Int((shotLength / maxSceneLength).rounded(.up)))
+            let partLength = shotLength / Double(parts)
 
-            // Weight motion by (log-scaled) length so a single flashy frame
-            // doesn't beat a sustained interesting shot.
-            let duration = endSeconds - startSeconds
-            let score = (meanMotion + 0.01) * log(1 + duration)
+            for p in 0..<parts {
+                let startSeconds = shotStart + Double(p) * partLength
+                let endSeconds = (p == parts - 1) ? shotEnd : startSeconds + partLength
+                guard endSeconds > startSeconds else { continue }
 
-            scenes.append(Scene(
-                range: CMTimeRange(
-                    start: TimeRangeMath.time(startSeconds),
-                    end: TimeRangeMath.time(endSeconds)
-                ),
-                score: score
-            ))
+                // Average visual motion within the sub-scene.
+                let inside = series.filter { $0.time > startSeconds && $0.time <= endSeconds }
+                let meanMotion = inside.isEmpty ? 0 : inside.map(\.motion).reduce(0, +) / Double(inside.count)
+
+                // Weight motion by (log-scaled) length so a single flashy frame
+                // doesn't beat a sustained interesting shot.
+                let score = (meanMotion + 0.01) * log(1 + (endSeconds - startSeconds))
+
+                scenes.append(Scene(
+                    range: CMTimeRange(
+                        start: TimeRangeMath.time(startSeconds),
+                        end: TimeRangeMath.time(endSeconds)
+                    ),
+                    score: score
+                ))
+            }
         }
 
         return scenes
