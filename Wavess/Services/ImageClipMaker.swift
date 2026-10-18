@@ -1,10 +1,17 @@
 import AVFoundation
+import CoreGraphics
 import CoreImage
-import UIKit
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Turns a still photo into a short silent video clip (H.264, even dimensions)
 /// so images can flow through the exact same reel pipeline as video clips —
 /// analysed, Vision-scored, beat-synced and stitched like any other segment.
+///
+/// Photos are decoded **downsampled** straight to a small size via ImageIO, so a
+/// 48-megapixel HEIC never loads at full resolution (~200 MB) — that full-res
+/// decode was what pushed memory over the device's per-app limit and crashed the
+/// app when images were added.
 enum ImageClipMaker {
 
     /// Shared across photos — a CIContext is expensive to create, so reusing one
@@ -12,8 +19,8 @@ enum ImageClipMaker {
     private static let ciContext = CIContext()
 
     static func makeStillVideo(from imageURL: URL, seconds: Double = 3.0) async -> URL? {
-        guard let image = UIImage(contentsOfFile: imageURL.path)?.uprightCGImage() else { return nil }
-        let size = evenSize(for: image, maxDimension: 1280)
+        guard let image = downsampledImage(from: imageURL, maxPixel: 1280) else { return nil }
+        let size = evenSize(for: image)
         guard size.width >= 2, size.height >= 2 else { return nil }
 
         let output = FileManager.default.temporaryDirectory
@@ -54,18 +61,26 @@ enum ImageClipMaker {
         return writer.status == .completed ? output : nil
     }
 
-    /// Image size scaled to fit `maxDimension` and rounded to even width/height.
-    private static func evenSize(for image: CGImage, maxDimension: CGFloat) -> CGSize {
-        var width = CGFloat(image.width)
-        var height = CGFloat(image.height)
-        let longest = max(width, height)
-        if longest > maxDimension {
-            let scale = maxDimension / longest
-            width *= scale
-            height *= scale
+    /// Decodes the image straight to a thumbnail no larger than `maxPixel` on its
+    /// long edge, with EXIF orientation baked in — without ever decoding the
+    /// full-resolution original into memory.
+    private static func downsampledImage(from url: URL, maxPixel: CGFloat) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
         }
-        func even(_ value: CGFloat) -> CGFloat { CGFloat(max(2, Int(value.rounded()) & ~1)) }
-        return CGSize(width: even(width), height: even(height))
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,   // bake in EXIF orientation
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
+    /// The decoded image rounded to even width/height (encoders prefer even).
+    private static func evenSize(for image: CGImage) -> CGSize {
+        func even(_ value: Int) -> CGFloat { CGFloat(max(2, value & ~1)) }
+        return CGSize(width: even(image.width), height: even(image.height))
     }
 
     private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
@@ -86,15 +101,5 @@ enum ImageClipMaker {
                          bounds: CGRect(origin: .zero, size: size),
                          colorSpace: CGColorSpaceCreateDeviceRGB())
         return buffer
-    }
-}
-
-private extension UIImage {
-    /// A CGImage with the photo's EXIF orientation baked in (always upright).
-    func uprightCGImage() -> CGImage? {
-        if imageOrientation == .up, let cg = cgImage { return cg }
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let upright = renderer.image { _ in draw(in: CGRect(origin: .zero, size: size)) }
-        return upright.cgImage
     }
 }
