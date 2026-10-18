@@ -4,23 +4,24 @@ import CoreImage
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Turns a still photo into a short silent video clip (H.264, even dimensions)
-/// so images can flow through the exact same reel pipeline as video clips —
-/// analysed, Vision-scored, beat-synced and stitched like any other segment.
+/// Turns a still photo into a short silent video clip (H.264) so images can flow
+/// through the same reel pipeline as video clips — analysed, Vision-scored,
+/// beat-synced and stitched like any other segment.
 ///
-/// Photos are decoded **downsampled** straight to a small size via ImageIO, so a
-/// 48-megapixel HEIC never loads at full resolution (~200 MB) — that full-res
-/// decode was what pushed memory over the device's per-app limit and crashed the
-/// app when images were added.
+/// The photo is rendered onto a canvas matching the reel's video frame, fitted
+/// and sharp, over a blurred aspect-fill copy of itself — so a photo of a
+/// different shape fills the frame (Instagram-style) instead of letterboxing to
+/// a different height than the videos.
+///
+/// Decoded downsampled via ImageIO, so a 48-megapixel HEIC never loads at full
+/// resolution (that full-res decode was what crashed the app on photos).
 enum ImageClipMaker {
 
-    /// Shared across photos — a CIContext is expensive to create, so reusing one
-    /// avoids a GPU-resource spike when converting many images in a batch.
     private static let ciContext = CIContext()
 
-    static func makeStillVideo(from imageURL: URL, seconds: Double = 3.0) async -> URL? {
+    static func makeStillVideo(from imageURL: URL, targetSize rawTarget: CGSize, seconds: Double = 3.0) async -> URL? {
         guard let image = downsampledImage(from: imageURL, maxPixel: 1280) else { return nil }
-        let size = evenSize(for: image)
+        let size = evenSize(fitting: rawTarget, maxLongEdge: 1280)
         guard size.width >= 2, size.height >= 2 else { return nil }
 
         let output = FileManager.default.temporaryDirectory
@@ -44,7 +45,7 @@ enum ImageClipMaker {
         guard writer.startWriting() else { return nil }
         writer.startSession(atSourceTime: .zero)
 
-        guard let buffer = pixelBuffer(from: image, size: size) else {
+        guard let buffer = blurredFillPixelBuffer(image, size: size) else {
             writer.cancelWriting()
             return nil
         }
@@ -61,29 +62,36 @@ enum ImageClipMaker {
         return writer.status == .completed ? output : nil
     }
 
-    /// Decodes the image straight to a thumbnail no larger than `maxPixel` on its
-    /// long edge, with EXIF orientation baked in — without ever decoding the
-    /// full-resolution original into memory.
     private static func downsampledImage(from url: URL, maxPixel: CGFloat) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
             return nil
         }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,   // bake in EXIF orientation
+            kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceShouldCacheImmediately: true
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
-    /// The decoded image rounded to even width/height (encoders prefer even).
-    private static func evenSize(for image: CGImage) -> CGSize {
-        func even(_ value: Int) -> CGFloat { CGFloat(max(2, value & ~1)) }
-        return CGSize(width: even(image.width), height: even(image.height))
+    /// Target canvas scaled to fit `maxLongEdge`, rounded to even width/height.
+    private static func evenSize(fitting target: CGSize, maxLongEdge: CGFloat) -> CGSize {
+        var width = max(2, target.width)
+        var height = max(2, target.height)
+        let longest = max(width, height)
+        if longest > maxLongEdge {
+            let scale = maxLongEdge / longest
+            width *= scale
+            height *= scale
+        }
+        func even(_ value: CGFloat) -> CGFloat { CGFloat(max(2, Int(value.rounded()) & ~1)) }
+        return CGSize(width: even(width), height: even(height))
     }
 
-    private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
+    /// Composites the photo (aspect-fit, sharp) over a blurred aspect-fill copy
+    /// of itself, filling `size` with no letterbox bars.
+    private static func blurredFillPixelBuffer(_ image: CGImage, size: CGSize) -> CVPixelBuffer? {
         var pixelBuffer: CVPixelBuffer?
         let attributes = [
             kCVPixelBufferCGImageCompatibilityKey: true,
@@ -94,11 +102,33 @@ enum ImageClipMaker {
               let buffer = pixelBuffer else { return nil }
 
         let ciImage = CIImage(cgImage: image)
-        let scaleX = size.width / CGFloat(image.width)
-        let scaleY = size.height / CGFloat(image.height)
-        let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-        ciContext.render(scaled, to: buffer,
-                         bounds: CGRect(origin: .zero, size: size),
+        let iw = ciImage.extent.width
+        let ih = ciImage.extent.height
+        guard iw > 0, ih > 0 else { return nil }
+        let targetRect = CGRect(origin: .zero, size: size)
+
+        // Blurred aspect-fill background.
+        let fillScale = max(size.width / iw, size.height / ih)
+        let filled = ciImage.transformed(by: CGAffineTransform(scaleX: fillScale, y: fillScale))
+        let filledSize = CGSize(width: iw * fillScale, height: ih * fillScale)
+        let background = filled
+            .transformed(by: CGAffineTransform(translationX: (size.width - filledSize.width) / 2,
+                                               y: (size.height - filledSize.height) / 2))
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 28])
+            .cropped(to: targetRect)
+
+        // Sharp aspect-fit foreground.
+        let fitScale = min(size.width / iw, size.height / ih)
+        let fittedSize = CGSize(width: iw * fitScale, height: ih * fitScale)
+        let foreground = ciImage
+            .transformed(by: CGAffineTransform(scaleX: fitScale, y: fitScale))
+            .transformed(by: CGAffineTransform(translationX: (size.width - fittedSize.width) / 2,
+                                               y: (size.height - fittedSize.height) / 2))
+
+        let composite = foreground.composited(over: background)
+        ciContext.render(composite, to: buffer,
+                         bounds: targetRect,
                          colorSpace: CGColorSpaceCreateDeviceRGB())
         return buffer
     }

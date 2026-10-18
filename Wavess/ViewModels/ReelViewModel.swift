@@ -125,6 +125,11 @@ final class ReelViewModel {
         guard !urls.isEmpty else { return }
         phase = .analyzing
 
+        // Target frame for photos = the reel's video aspect, so a photo fills the
+        // same frame as the videos (with a blurred background) instead of
+        // letterboxing to a different height. Defaults to vertical 9:16.
+        let photoTarget = await reelVideoFrameSize(urls: urls)
+
         var loaded: [ReelClip] = []
         for (index, url) in urls.enumerated() {
             progress = Double(index) / Double(urls.count)
@@ -136,7 +141,7 @@ final class ReelViewModel {
             var clipURL = url
             let hasVideoTrack = ((try? await AVURLAsset(url: url).loadTracks(withMediaType: .video))?.isEmpty == false)
             if !hasVideoTrack {
-                guard let stillURL = await ImageClipMaker.makeStillVideo(from: url) else { continue }
+                guard let stillURL = await ImageClipMaker.makeStillVideo(from: url, targetSize: photoTarget) else { continue }
                 clipURL = stillURL
             }
 
@@ -168,6 +173,21 @@ final class ReelViewModel {
         } else {
             phase = .ready
         }
+    }
+
+    /// The oriented frame size of the first real video in the selection — the
+    /// aspect photos should fill. Falls back to vertical 9:16 when there are no
+    /// videos (all photos).
+    private func reelVideoFrameSize(urls: [URL]) async -> CGSize {
+        for url in urls {
+            let asset = AVURLAsset(url: url)
+            guard let track = try? await asset.loadTracks(withMediaType: .video).first else { continue }
+            let transform = (try? await track.load(.preferredTransform)) ?? .identity
+            let natural = (try? await track.load(.naturalSize)) ?? .zero
+            let oriented = VideoGeometry.orientedSize(natural: natural, transform: transform)
+            if oriented.width > 1, oriented.height > 1 { return oriented }
+        }
+        return CGSize(width: 1080, height: 1920)
     }
 
     /// Re-picks key scenes for every clip at the current target fraction.
