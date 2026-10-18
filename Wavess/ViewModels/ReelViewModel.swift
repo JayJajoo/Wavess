@@ -51,6 +51,8 @@ final class ReelViewModel {
     var speedEffectsEnabled = true
     private(set) var musicAnalysis: MusicAnalysis?
     var isAnalyzingMusic = false
+    /// Coarse amplitude envelope of the whole song (0...1), for the trimmer waveform.
+    private(set) var musicWaveform: [Float] = []
 
     // MARK: Music preview playback
     private var previewPlayer: AVAudioPlayer?
@@ -293,6 +295,7 @@ final class ReelViewModel {
         musicFullDuration = duration.seconds
         musicStart = 0
         musicSectionDuration = min(60, duration.seconds)
+        musicWaveform = await WaveformSampler.sample(asset: asset)
         await analyzeMusicSection()
     }
 
@@ -319,6 +322,7 @@ final class ReelViewModel {
     func clearMusic() {
         stopPreview()
         previewTime = 0
+        musicWaveform = []
         musicURL = nil
         musicAsset = nil
         musicFullDuration = 0

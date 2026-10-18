@@ -144,52 +144,9 @@ struct ReelView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if model.maxMusicStart > 0 {
-                    LabeledSlider(
-                        title: "Start time",
-                        value: $model.musicStart,
-                        range: 0 ... model.maxMusicStart,
-                        step: 1,
-                        display: Formatting.timecode(model.musicStart),
-                        onCommit: { Task { await model.analyzeMusicSection() } }
-                    )
-                }
-                if model.maxMusicEnd > model.minMusicEnd {
-                    LabeledSlider(
-                        title: "End time",
-                        value: $model.musicEnd,
-                        range: model.minMusicEnd ... model.maxMusicEnd,
-                        step: 1,
-                        display: Formatting.timecode(model.musicEnd),
-                        onCommit: { Task { await model.analyzeMusicSection() } }
-                    )
-                }
-
-                // Listen to the chosen section and scrub within it.
-                HStack(spacing: 12) {
-                    Button { model.togglePreview() } label: {
-                        Image(systemName: model.isPreviewingMusic ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 34))
-                            .foregroundStyle(Color.accentColor)
-                    }
-                    .buttonStyle(.plain)
-
-                    Slider(
-                        value: Binding(
-                            get: { min(max(model.previewTime, model.musicStart), model.musicEnd) },
-                            set: { model.seekPreview(to: $0) }
-                        ),
-                        in: model.musicStart ... max(model.musicStart + 0.1, model.musicEnd)
-                    )
-
-                    Text(Formatting.timecode(model.previewTime))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
-                }
-                Text("Preview your section — tap play and drag the dot to hear where the music starts, plays and ends.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                // Instagram-style trimmer: crop the start→end window on the song's
+                // waveform and preview just that part.
+                MusicTrimmer(model: model)
 
                 Picker("Cut pace", selection: Binding<Int>(
                     get: { model.autoPace ? 0 : model.beatsPerCut },
