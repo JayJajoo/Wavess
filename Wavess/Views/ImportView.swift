@@ -16,7 +16,7 @@ struct ImportView: View {
             VStack(spacing: 10) {
                 Text("Intelligent video editing")
                     .font(.title2.bold())
-                Text("Pick a clip and Wavess will trim the dead air and find your best moments — all on your device.")
+                Text("Pick a clip and Wavess trims the dull stretches and finds your best moments — all on your device.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -24,8 +24,8 @@ struct ImportView: View {
             }
 
             VStack(alignment: .leading, spacing: 14) {
-                FeatureRow(icon: "speaker.slash.fill", title: "Auto-remove silence", detail: "Cuts the quiet gaps and keeps the talking.")
-                FeatureRow(icon: "film.stack", title: "Scene highlights", detail: "Detects shots and assembles a short cut.")
+                FeatureRow(icon: "car.fill", title: "Trim still footage", detail: "Cuts static/stopped parts — great for scenery & driving. No speech needed.")
+                FeatureRow(icon: "film.stack", title: "Scene highlights", detail: "Detects the most dynamic shots and assembles a short cut.")
                 FeatureRow(icon: "lock.fill", title: "Fully on-device", detail: "No uploads, no accounts, no network.")
             }
             .padding(.horizontal, 32)

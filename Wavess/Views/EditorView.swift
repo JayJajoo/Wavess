@@ -87,9 +87,12 @@ struct EditorView: View {
             statsCard
             TimelineView(duration: model.duration, keep: model.keepRanges)
 
-            if model.mode == .tighten {
-                tightenControls
-            } else {
+            switch model.mode {
+            case .trimStill:
+                trimStillControls
+            case .trimSilence:
+                trimSilenceControls
+            case .highlights:
                 highlightControls
             }
 
@@ -130,11 +133,48 @@ struct EditorView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: Tighten controls
+    // MARK: Trim-still controls (visual — scenery / driving)
 
-    private var tightenControls: some View {
+    private var trimStillControls: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Silence removal").font(.subheadline.weight(.semibold))
+            Text("Remove still footage").font(.subheadline.weight(.semibold))
+            Text("No speech needed — this cuts the stretches where the view barely changes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LabeledSlider(
+                title: "Stillness threshold",
+                value: $model.settings.motionStillThreshold,
+                range: 0.005 ... 0.08,
+                step: 0.005,
+                display: String(format: "%.1f%%", model.settings.motionStillThreshold * 100),
+                onCommit: recomputeVisualAction
+            )
+            LabeledSlider(
+                title: "Min. still length",
+                value: $model.settings.minStillDuration,
+                range: 0.3 ... 5,
+                step: 0.1,
+                display: String(format: "%.1fs", model.settings.minStillDuration),
+                onCommit: recomputeVisualAction
+            )
+            keepPaddingSlider
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: Trim-silence controls (audio — talking videos)
+
+    private var trimSilenceControls: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Remove silence").font(.subheadline.weight(.semibold))
+            if !model.hasAudio {
+                Text("This clip has no audio — try “Still” or “Highlights” instead.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
 
             LabeledSlider(
                 title: "Silence threshold",
@@ -142,7 +182,7 @@ struct EditorView: View {
                 range: -60 ... -20,
                 step: 1,
                 display: "\(Int(model.settings.silenceThresholdDB)) dB",
-                onCommit: reanalyze
+                onCommit: recomputeAudioAction
             )
             LabeledSlider(
                 title: "Min. silence length",
@@ -150,20 +190,25 @@ struct EditorView: View {
                 range: 0.1 ... 1.5,
                 step: 0.05,
                 display: String(format: "%.2fs", model.settings.minSilenceDuration),
-                onCommit: reanalyze
+                onCommit: recomputeAudioAction
             )
-            LabeledSlider(
-                title: "Keep around speech",
-                value: $model.settings.speechPadding,
-                range: 0 ... 0.3,
-                step: 0.01,
-                display: String(format: "%.2fs", model.settings.speechPadding),
-                onCommit: nil  // applied live, no re-analysis needed
-            )
+            keepPaddingSlider
         }
         .padding()
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Shared "keep around cuts" slider — applied live, no recompute needed.
+    private var keepPaddingSlider: some View {
+        LabeledSlider(
+            title: "Keep around cuts",
+            value: $model.settings.keepPadding,
+            range: 0 ... 0.5,
+            step: 0.01,
+            display: String(format: "%.2fs", model.settings.keepPadding),
+            onCommit: nil
+        )
     }
 
     // MARK: Highlight controls
@@ -192,7 +237,7 @@ struct EditorView: View {
                 range: 0 ... 1,
                 step: 0.05,
                 display: "\(Int(model.settings.sceneSensitivity * 100))%",
-                onCommit: reanalyze
+                onCommit: recomputeVisualAction
             )
 
             if !model.scenes.isEmpty {
@@ -288,9 +333,17 @@ struct EditorView: View {
 
     // MARK: - Helpers
 
-    private func reanalyze() {
+    /// Visual slider changed — recompute scenes & still ranges from cached
+    /// frames (fast, no re-scan).
+    private func recomputeVisualAction() {
         showSavedConfirmation = false
-        Task { await model.analyze() }
+        model.recomputeVisual()
+    }
+
+    /// Audio slider changed — re-run only the silence pass.
+    private func recomputeAudioAction() {
+        showSavedConfirmation = false
+        Task { await model.recomputeAudio() }
     }
 }
 

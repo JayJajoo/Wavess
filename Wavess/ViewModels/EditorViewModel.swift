@@ -18,14 +18,16 @@ final class EditorViewModel {
     }
 
     enum Mode: String, CaseIterable, Identifiable {
-        case tighten = "Tighten"
+        case trimStill = "Still"
         case highlights = "Highlights"
+        case trimSilence = "Silence"
         var id: String { rawValue }
 
         var subtitle: String {
             switch self {
-            case .tighten: return "Remove silent gaps, keep the talking"
-            case .highlights: return "Auto-pick the best scenes into a short cut"
+            case .trimStill:   return "Cut static / stopped stretches — great for scenery & driving"
+            case .highlights:  return "Auto-pick the most dynamic scenes into a short cut"
+            case .trimSilence: return "Cut quiet gaps — for talking videos"
             }
         }
     }
@@ -39,10 +41,14 @@ final class EditorViewModel {
     // MARK: Inputs
 
     var settings = AnalysisSettings()
-    var mode: Mode = .tighten
+    var mode: Mode = .trimStill
 
     // MARK: Analysis results
 
+    /// Cached frame sample — reused so slider tweaks recompute instantly without
+    /// re-decoding the video.
+    private var frames: [SampledFrame] = []
+    private(set) var stillRanges: [CMTimeRange] = []
     private(set) var silentRanges: [CMTimeRange] = []
     var scenes: [Scene] = []
 
@@ -63,9 +69,12 @@ final class EditorViewModel {
         let total = TimeRangeMath.time(duration)
 
         switch mode {
-        case .tighten:
+        case .trimStill:
+            let moving = TimeRangeMath.invert(stillRanges, total: total)
+            return TimeRangeMath.pad(moving, by: settings.keepPadding, total: total)
+        case .trimSilence:
             let speech = TimeRangeMath.invert(silentRanges, total: total)
-            return TimeRangeMath.pad(speech, by: settings.speechPadding, total: total)
+            return TimeRangeMath.pad(speech, by: settings.keepPadding, total: total)
         case .highlights:
             let selected = scenes
                 .filter(\.isSelected)
@@ -87,6 +96,11 @@ final class EditorViewModel {
         scenes.filter(\.isSelected).count
     }
 
+    var hasAudio: Bool {
+        !silentRanges.isEmpty || audioTrackPresent
+    }
+    private var audioTrackPresent = false
+
     var canExport: Bool {
         (phase == .ready || phase == .done) && !keepRanges.isEmpty
     }
@@ -102,12 +116,15 @@ final class EditorViewModel {
         do {
             let loadedDuration = try await asset.load(.duration)
             duration = loadedDuration.seconds
+            audioTrackPresent = (try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false
             await analyze()
         } catch {
             fail(error)
         }
     }
 
+    /// Full analysis: sample frames once, then derive scenes, still ranges, and
+    /// (if there's audio) silent ranges.
     func analyze() async {
         guard let asset else { return }
         phase = .analyzing
@@ -115,24 +132,39 @@ final class EditorViewModel {
         errorMessage = nil
         resultURL = nil
 
-        do {
-            statusMessage = "Listening for silence…"
-            let silence = try await SilenceDetector().detectSilence(in: asset, settings: settings)
-            silentRanges = silence
-            progress = 0.5
+        let total = TimeRangeMath.time(duration)
 
-            statusMessage = "Scanning for scenes…"
-            let total = TimeRangeMath.time(duration)
-            let detected = try await SceneDetector().detectScenes(in: asset, total: total, settings: settings)
-            scenes = detected
-            autoSelectHighlights()
+        statusMessage = "Scanning the video…"
+        frames = await FrameSampler().sample(asset: asset, total: total, fps: settings.sampleFPS)
+        progress = 0.55
 
-            progress = 1
-            statusMessage = ""
-            phase = .ready
-        } catch {
-            fail(error)
-        }
+        statusMessage = "Finding scenes & motion…"
+        recomputeVisual()
+        progress = 0.8
+
+        statusMessage = "Checking audio…"
+        silentRanges = (try? await SilenceDetector().detectSilence(in: asset, settings: settings)) ?? []
+
+        progress = 1
+        statusMessage = ""
+        phase = .ready
+    }
+
+    /// Recomputes scene and still results from the cached frames — fast, no I/O.
+    /// Used when a visual slider (still threshold, min still, scene sensitivity)
+    /// changes.
+    func recomputeVisual() {
+        guard duration > 0 else { return }
+        let total = TimeRangeMath.time(duration)
+        scenes = SceneDetector().detectScenes(frames: frames, total: total, settings: settings)
+        stillRanges = MotionAnalyzer().detectStillRanges(frames: frames, total: total, settings: settings)
+        autoSelectHighlights()
+    }
+
+    /// Re-runs only the audio silence pass. Used when a silence slider changes.
+    func recomputeAudio() async {
+        guard let asset else { return }
+        silentRanges = (try? await SilenceDetector().detectSilence(in: asset, settings: settings)) ?? []
     }
 
     /// Picks the highest-scoring scenes until the highlight reel reaches the
@@ -203,8 +235,11 @@ final class EditorViewModel {
         sourceURL = nil
         asset = nil
         duration = 0
+        frames = []
+        stillRanges = []
         silentRanges = []
         scenes = []
+        audioTrackPresent = false
         resultURL = nil
         progress = 0
         statusMessage = ""

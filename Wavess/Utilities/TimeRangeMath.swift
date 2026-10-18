@@ -3,8 +3,9 @@ import Foundation
 
 /// Pure helpers for manipulating ordered lists of `CMTimeRange`s.
 ///
-/// These power the two edit modes: "tighten" inverts the detected silence to
-/// get the speech to keep, and both modes merge/clamp ranges before export.
+/// These power the edit modes: the trim modes invert the detected still/silent
+/// ranges to get what to keep, and every mode merges/clamps/pads ranges before
+/// export.
 enum TimeRangeMath {
 
     static let timescale: CMTimeScale = 600
