@@ -515,14 +515,6 @@ final class ReelViewModel {
         let baseIntervals = baseGrid.count - 1
         guard baseIntervals >= 1 else { return nil }
 
-        // A cut-point time for any global interval index: the section's beat grid
-        // tiled forward (the music loops every `section`, so the beats line up).
-        func gridTime(_ g: Int) -> Double {
-            let loop = g / baseIntervals
-            let within = g % baseIntervals
-            return baseGrid[within] + Double(loop) * section
-        }
-
         // Loudness envelope (0...1 per beat) for Auto pacing: calm verses hold
         // longer, loud build-ups and choruses cut faster.
         let energyEnvelope = analysis.beatEnergies
@@ -537,36 +529,34 @@ final class ReelViewModel {
             return 1 + (1 - energyEnvelope[nearest]) * 3   // loud → ~1 beat/cut, quiet → ~4
         }
 
-        // Place EVERY scene, each once: give it a beat span from the music's
-        // energy (Auto) or the manual pace, nudged by the shot's quality.
+        // Fill the chosen section ONCE, in order: place scenes until the music runs
+        // out. The reel never grows past the section (so it matches your music
+        // length), and scenes keep their selected/timeline order — no reordering.
         var cuts: [Double] = [0]
         var chosen: [FlatScene] = []
         var cursor = 0
-        for item in pool {
+        var poolIndex = 0
+        while cursor < baseIntervals && poolIndex < pool.count {
+            let item = pool[poolIndex]
             let norm = maxScore > 0 ? max(0, min(1, item.score / maxScore)) : 0.5
-            let sectionTime = gridTime(cursor).truncatingRemainder(dividingBy: section)
-            let baseline = autoPace ? autoBeats(sectionTime: sectionTime) : Double(max(1, beatsPerCut))
+            let baseline = autoPace ? autoBeats(sectionTime: baseGrid[cursor]) : Double(max(1, beatsPerCut))
             let span = max(1, Int((baseline * (0.5 + norm)).rounded()))
-            var next = cursor + span
-            while gridTime(next) - gridTime(cursor) < 0.5 { next += 1 }  // keep slots ≥ 0.5s
-            cuts.append(gridTime(next))
+            var next = min(cursor + span, baseIntervals)
+            while next < baseIntervals && baseGrid[next] - baseGrid[cursor] < 0.5 { next += 1 }        // slots ≥ 0.5s
+            if next < baseIntervals && baseGrid[baseIntervals] - baseGrid[next] < 0.5 { next = baseIntervals }  // no tiny tail
+            cuts.append(baseGrid[next])
             chosen.append(item)
             cursor = next
+            poolIndex += 1
         }
-        guard cuts.count == chosen.count + 1 else { return nil }
+        guard !chosen.isEmpty, cuts.count == chosen.count + 1 else { return nil }
 
-        // Save the best shot for the drop: find the slot that lands on the detected
-        // drop and swap the highest-scoring scene into it (cut hard into it and hold
-        // it in slow-mo below). No-op when the song has no clear drop.
+        // Mark the slot that lands on the drop (hard cut + slow-mo applied below) —
+        // without reordering, so the sequence stays intact.
         var dropSlot: Int?
         if let dropBeat = analysis.dropBeatIndex, dropBeat < analysis.beats.count {
             let dropTime = analysis.beats[dropBeat]
-            if let slot = (0..<chosen.count).first(where: { cuts[$0] <= dropTime && dropTime < cuts[$0 + 1] }) {
-                dropSlot = slot
-                if let best = chosen.indices.max(by: { chosen[$0].score < chosen[$1].score }), best != slot {
-                    chosen.swapAt(slot, best)
-                }
-            }
+            dropSlot = (0..<chosen.count).first(where: { cuts[$0] <= dropTime && dropTime < cuts[$0 + 1] })
         }
 
         var slots: [MusicSlot] = chosen.map {
