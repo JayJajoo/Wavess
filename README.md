@@ -1,345 +1,189 @@
-# LinkedIn Audience Intelligence & Post Performance System
+# Wavess — Intelligent Video Editor for iPhone
 
-Complete system for analyzing LinkedIn post engagement and audience data to optimize content strategy and identify high-value prospects.
+An on-device, SwiftUI + AVFoundation iPhone app that automatically tightens and
+stitches your videos. Two flows:
 
-## 📋 Overview
+**🎞️ Build a Reel (multiple clips)**
+- Import several videos (e.g. 3–5 min scenery/driving clips).
+- Wavess analyzes each on-device, detects scenes, and picks the **key scenes** from
+  every clip.
+- Stitches them into one reel with **cross-dissolve transitions applied
+  selectively** — by default only where one clip hands off to the next, not at
+  every cut.
+- 🎵 **Beat-synced music** — pick a 30s–2min section of a song; Wavess detects its
+  beats and tempo and cuts the clips **on the beat**, with the music as the
+  soundtrack and the reel running the length of your chosen section.
+- ⏩ **Intelligent speed ramps** — adds slow-motion on strong, dynamic beats and
+  fast-forward through long static shots, on *selected* beats only (never every
+  cut), always keeping the cut locked to the beat.
+- 🎨 **Color grading** — apply a look (Vivid, Warm, Cool, Cinematic, B&W, Vintage)
+  to the whole reel, or give individual clips their own look to grade just that
+  section.
 
-This system delivers two core capabilities:
+**✂️ Edit one clip**
+- 🚗 **Trim still footage** — cut stretches where almost nothing changes (a stopped
+  car, a static hold), keeping where the view is actually moving. **No speech
+  required** — ideal for scenery, driving, and b-roll.
+- 🎬 **Highlights** — detect scenes, score them, and auto-assemble a shorter cut.
+- 🔇 **Remove silence** — for *talking* videos: cut the quiet gaps, keep the speech.
 
-### **Part A: Audience Intelligence** 
-- Extracts and classifies LinkedIn profiles from post engagers
-- Computes relevance scores (0-100) based on ICP alignment
-- Identifies high-value prospects for outreach
+Everything runs **locally on the phone** — no network, no accounts, no API keys,
+and no FFmpeg. It uses only Apple frameworks (AVFoundation, AVKit, CoreMedia,
+CoreGraphics, PhotosUI).
 
-### **Part B: Post Performance Analysis**
-- Analyzes post content features (word count, questions, hashtags, etc.)
-- Predicts performance (overperform/average/underperform)
-- Provides actionable optimization recommendations
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-```bash
-pip install pandas
-```
-
-No external paid APIs required! ✅
-
-### Basic Usage
-
-```bash
-# With both audience data and post text
-python main.py linkedin_contacts.csv post.txt
-```
-
-### Input Requirements
-
-**1. Audience CSV** (`linkedin_contacts.csv`):
-```csv
-Name,Title
-John Smith,"VP of Sustainability @ Klarna | Climate Tech Advocate"
-Jane Doe,"Head of Risk and Compliance at FinanceInc"
-```
-
-**2. Post Text** (`post.txt`) - Optional:
-```
-🌍 Exciting news! Klarna's Climate Resilience Program is now live...
-```
+> Why native instead of React Native / Flutter? The popular cross-platform
+> FFmpeg wrappers (`ffmpeg-kit-react-native`, `ffmpeg_kit_flutter`) were retired
+> in 2025 and are unmaintained. iOS ships first-class on-device media APIs, so
+> we get motion/scene/silence analysis and video export with zero third-party
+> dependencies.
 
 ---
 
-## 📊 Output Files
+## Requirements
 
-The system generates 4 key files:
+- **Xcode 16 or newer** (the project uses Xcode 16 "file system synchronized"
+  groups). On older Xcode, regenerate the project with XcodeGen — see below.
+- **iOS 17+** device or simulator.
+- An Apple Developer account for signing when running on a physical device
+  (free personal team is fine).
 
-### 1. **Audience Intelligence CSV** (`audience_intelligence_TIMESTAMP.csv`)
-```csv
-name,title,company,role_function,seniority,company_type,geo,score,score_reason,excluded
-John Smith,VP of Sustainability...,Klarna,climate,vp,fintech,nordics,95,Function+Seniority+CompanyType+Geo,false
+## Run it
+
+1. Open the project:
+   ```sh
+   open Wavess.xcodeproj
+   ```
+2. Select the **Wavess** scheme and a simulator or your connected iPhone.
+3. Set your signing team: select the **Wavess** target → **Signing &
+   Capabilities** → choose your Team. (The bundle id defaults to
+   `com.wavess.app`; change it if it's taken.)
+4. Press **▶︎ Run**.
+
+> **Tip:** the Simulator has no camera roll videos by default. Drag a `.mov`/
+> `.mp4` onto the simulator window to add one to Photos, or just run on a real
+> device where you already have clips.
+
+### Older Xcode? Regenerate with XcodeGen
+
+The committed `Wavess.xcodeproj` targets Xcode 16. If you're on an earlier
+version (or the project file gets corrupted), regenerate it from `project.yml`:
+
+```sh
+brew install xcodegen
+xcodegen generate
+open Wavess.xcodeproj
 ```
 
-**Columns:**
-- `name`: Full name from LinkedIn
-- `title`: Original LinkedIn title
-- `company`: Extracted company name
-- `role_function`: Classified function (climate, finance, risk, etc.)
-- `seniority`: Level (c_level, vp, director, manager, etc.)
-- `company_type`: Type (fintech, consulting, climate_tech, etc.)
-- `geo`: Geography (nordics, europe, north_america, etc.)
-- `score`: Relevance score 0-100
-- `score_reason`: Explanation of score components
-- `excluded`: Boolean flag for excluded profiles
+## How to use
 
-### 2. **Post Performance JSON** (`post_performance_analysis_TIMESTAMP.json`)
-```json
-{
-  "word_count": 145,
-  "has_question": true,
-  "hashtag_count": 5,
-  "emoji_count": 2,
-  "predicted_performance": "overperform",
-  "performance_score": 85,
-  "performance_reason": "OptimalLength+OptimalHashtags+HasQuestion+HasCTA"
-}
-```
+### Build a Reel
 
-### 3. **Combined Intelligence Report** (`linkedin_intelligence_report_TIMESTAMP.txt`)
-Comprehensive text report with:
-- Post performance prediction and recommendations
-- Audience breakdown by function, seniority, geography
-- Top 10 highest-value prospects
-- Strategic insights and alignment analysis
+1. On the home screen tap **Build a Reel** and select several videos.
+2. Wavess analyzes each clip and auto-picks its key scenes. Expand any clip to
+   toggle individual scenes on/off.
+3. *(Optional)* **Add music** — pick a song, choose the start and a 30s–2min
+   section, set **cut every N beats**, and toggle **speed ramps**. The reel will
+   sync to the beat and run the length of the section.
+4. Set the **transitions**: style (dissolve / hard cut), when they apply
+   (*between clips* — the default — or *every scene*), and the transition length.
+   (Without music, also set **key scenes per clip**.)
+5. *(Optional)* **Color** — pick a reel-wide look, and/or give any clip its own
+   look to grade just that section.
+6. Tap **Build reel**, then **Save to Photos** or **Share**.
 
-### 4. **High-Value Prospects List** (`high_value_prospects_TIMESTAMP.csv`)
-Filtered list of profiles scoring ≥70 with outreach priority (HIGH/MEDIUM/LOW)
+### Edit one clip
 
----
+1. On the home screen tap **Edit one clip** and pick a video.
+2. Wavess analyzes it (one frame-sampling pass + an audio pass) and shows a
+   timeline of what it will keep (accent) vs. cut (dim).
+3. Pick a mode:
+   - **Still** — removes static/stopped stretches. *This is the one for silent
+     scenery / driving footage.*
+   - **Highlights** — builds a short cut from the most dynamic scenes.
+   - **Silence** — removes quiet gaps (talking videos); flags clips with no audio.
+4. Tap **Export edit**, then **Save to Photos** or **Share**.
 
-## Scoring Logic
+Slider tweaks recompute instantly from the cached frame sample — no re-scan.
 
-### Audience Relevance Score (0-100)
+## How it works
 
-| Factor | Points | Criteria |
-|--------|--------|----------|
-| **Function Match** | +40 | Exact match to target functions (climate, finance, risk, executive) |
-| | +20 | Partial match (sales, marketing, product) |
-| **Seniority Match** | +25 | C-level, VP, Director |
-| | +10 | Manager/Lead |
-| **Company Type** | +20 | Exact match (fintech, finance, climate_tech, enterprise) |
-| | +10 | Adjacent (consulting, tech) |
-| **Geography** | +10 | Target regions (nordics, europe) |
-| **Keywords** | +5 each | Post-specific keywords (cap +10) |
-| **Exclusions** | -100 | Competitors, spam, bots |
+| Step | Technique | File |
+|------|-----------|------|
+| Frame sampling | Sample frames at N fps, downscale each to a 32×32 grayscale signature (one shared pass) | `Services/FrameSampler.swift` |
+| Still detection | Measure frame-to-frame visual change; sustained low-change stretches become "still" ranges to cut | `Services/MotionAnalyzer.swift` |
+| Scene detection | Big frame-to-frame differences mark cuts; the spans between become scenes | `Services/SceneDetector.swift` |
+| Highlight scoring | Score each scene by average visual change × length; auto-select the top scenes to hit a target duration | `Services/SceneDetector.swift`, `ViewModels/EditorViewModel.swift` |
+| Silence detection | Decode audio to mono 16 kHz PCM, compute per-window RMS → dBFS, threshold into silent ranges | `Services/SilenceDetector.swift` |
+| Reel + transitions | Flatten key scenes across clips; alternate two video tracks, overlap selectively, ramp opacity for cross-dissolves, fit each source into a common render size | `Services/ReelBuilder.swift` |
+| Beat detection | Decode the music section to PCM → energy-flux onset envelope → autocorrelation for tempo + phase search → an even beat grid (no FFT) | `Services/MusicAnalyzer.swift` |
+| Beat-synced reel | Place cuts on the beat grid; center transitions on the beat; apply per-slot speed via `scaleTimeRange` while keeping the slot on-beat; lay the music under it with fades | `Services/MusicReelBuilder.swift` |
+| Speed selection | Score each beat by music strength × scene motion; slow-mo on strong dynamic beats, fast-forward through long static shots, never back-to-back | `ViewModels/ReelViewModel.swift` |
+| Color grading | Second pass: `AVVideoComposition` with a CIFilter handler that picks a look per time range (whole video or per clip/section) | `Services/ColorGrader.swift` |
+| Assembly & export | Build an `AVMutableComposition` (+ `AVVideoComposition` / `AVAudioMix`), preserve orientation, export `.mp4` via `AVAssetExportSession` | `Services/VideoComposer.swift` |
 
-**Score capped at 100**
-
-### Post Performance Score (0-100)
-
-| Factor              | Points | Optimal Range |
-|---------------------|--------|---------------|
-| **Word Count**      | +20    | 100-200 words |
-| **Hashtags**        | +15    | 3-5 hashtags |
-| **Question**        | +15    | Contains question mark |
-| **Call to Action**  | +15    | Has CTA phrase |
-| **Structure**       | +10    | 3-5 paragraphs |
-| **Emojis**          | +10    | 1-3 emojis |
-| **External Link**   | +10    | Has link |
-| **Engagement Words**| +5     | 2+ engagement keywords |
-
-**Performance Categories:**
-- **Overperform**: Score ≥ 75
-- **Average**: Score 50-74
-- **Underperform**: Score < 50
-
----
-
-## Configuration
-
-### Customizing Dictionaries
-
-Edit `DICTIONARIES` in `partA.py`:
-
-```python
-DICTIONARIES = {
-    "functions": {
-        "your_function": ["keyword1", "keyword2", ...],
-        ...
-    },
-    "seniority": {...},
-    "company_types": {...},
-    "geographies": {...}
-}
-```
-
-### Customizing ICP (Ideal Customer Profile)
-
-Edit `ICP_CONFIG` to match your target audience:
-
-```python
-ICP_CONFIG = {
-    "target_functions": ["climate", "finance", "risk"],
-    "target_seniority": ["c_level", "vp", "director"],
-    "target_company_types": ["fintech", "enterprise"],
-    "target_geo": ["nordics", "europe"]
-}
-```
-
-### Adding Exclusions
-
-Add companies/patterns to exclude:
-
-```python
-EXCLUSIONS = [
-    "competitor_name",
-    "spam",
-    "bot"
-]
-```
-
----
-
-## Testing
-
-### Run Unit Tests
-
-```bash
-python partA.py
-```
-
-Tests include 8 tricky title parsing cases:
-- "Global Lead, Risk & Compliance @ Klarna"
-- "VP GTM @ TechCorp | Board Advisor"
-- "Interim Head Product Risk at FinanceInc"
-- "Chief Sustainability Officer | Climate Tech Investor"
-- "Senior Engineering Manager @ Klarna | Applied AI"
-- "Head of Climate and Environment at Klarna"
-- "Co-founder BLING, Investor"
-- "Partner Success Lead @Milkywire"
-
-**Expected Result**: ≥95% success rate (7-8 passing)
-
----
-
-## 📁 Project Structure
+### Project layout
 
 ```
-linkedin-intelligence-system/
-├── Task1.csv            # Task1 csv file
-├── partA.py            # Part A: Audience scoring
-├── partB.py            # Part B: Post performance
-├── main.py             # Main orchestrator
-├── dictionaries.json                 # Auto-generated reference
-├── README.md                         # This file
-├── requirements.txt                  # Dependencies
-├── post.txt                          # Sample post text
-└── linkedin_contacts.csv             # Sample audience data
+Wavess/
+├── WavessApp.swift            App entry point
+├── Models/
+│   ├── AnalysisSettings.swift Tunable thresholds (exposed as sliders)
+│   ├── Scene.swift            Scene model + error types
+│   ├── ReelClip.swift         One source clip in a reel + its scenes + look
+│   ├── TransitionSettings.swift  Transition style / frequency / length
+│   └── Look.swift             Color-grading presets
+├── Services/
+│   ├── FrameSampler.swift     Shared frame sampling + motion signal
+│   ├── MotionAnalyzer.swift   Still / low-motion detection (visual)
+│   ├── SceneDetector.swift    Scene detection + highlight scoring
+│   ├── SilenceDetector.swift  Audio RMS/dB silence analysis
+│   ├── MusicAnalyzer.swift    Beat/tempo detection for a music section
+│   ├── ReelBuilder.swift      Multi-clip stitch + cross-dissolve transitions
+│   ├── MusicReelBuilder.swift Beat-synced stitch + speed ramps + music track
+│   ├── ColorGrader.swift      Time-ranged color grading (CIFilter pass)
+│   ├── VideoComposer.swift    Composition assembly + export
+│   └── PhotoSaver.swift       Save result to the photo library
+├── ViewModels/
+│   ├── EditorViewModel.swift  Single-clip: analysis, selection, look, export
+│   └── ReelViewModel.swift    Reel: per-clip analysis, music plan, speed, grade
+├── Views/
+│   ├── ContentView.swift      Root + home routing (editor ↔ reel)
+│   ├── ImportView.swift       Home screen (two entry points)
+│   ├── EditorView.swift       Single-clip editor
+│   ├── ReelView.swift         Reel builder (clips, music, transitions, color)
+│   ├── TimelineView.swift     Visual keep/cut timeline
+│   ├── SharedComponents.swift PlayerCard, LabeledSlider, SceneRow, LookChips…
+│   ├── VideoPicker.swift      PHPicker bridge → one local file URL
+│   ├── MultiVideoPicker.swift PHPicker bridge → multiple file URLs
+│   ├── AudioPicker.swift      Document picker → music file URL
+│   └── ShareSheet.swift       UIActivityViewController bridge
+└── Utilities/
+    ├── TimeRangeMath.swift    Invert / merge / pad CMTimeRanges
+    ├── ReelLayout.swift       Plain-reel timeline layout (for grade spans)
+    ├── VideoGeometry.swift    Orientation + aspect-fit transforms
+    ├── CGImage+Pixels.swift   Grayscale signatures + frame diffing
+    └── Formatting.swift       Timecode formatting
 ```
 
----
+## Roadmap ideas
 
-## Example Workflow
+- **Speed-ramp** boring stretches into a hyperlapse instead of cutting them
+  (popular for long drives).
+- Thumbnail previews per scene in the highlights list.
+- Stabilization pass for shaky handheld / dashcam footage.
+- Background rendering with progress notifications for long clips.
+- Speech transcription + caption burn-in and text-based editing (for talking
+  videos).
 
-### 1. Prepare Your Data
+## Notes & limitations
 
-Export LinkedIn post engagers to CSV:
-```csv
-Name,Title
-Sarah Johnson,"Chief Sustainability Officer @ TechCorp"
-Mike Chen,"VP of Finance at Klarna | Ex-McKinsey"
-```
-
-Save post text to file:
-```bash
-echo "Your LinkedIn post text here..." > post.txt
-```
-
-### 2. Run Analysis
-
-```bash
-python main.py linkedin_contacts.csv post.txt
-```
-
-### 3. Review Outputs
-
-- **Audience CSV**: Import to CRM for segmentation
-- **Post Performance**: Apply recommendations to future posts
-- **Intelligence Report**: Share with marketing team
-- **Prospects List**: Prioritize for sales outreach
-
-### 4. Take Action
-
-Based on insights:
-1. Engage with high-priority prospects (score ≥70)
-2. Optimize future posts using performance recommendations
-3. Create targeted content for top audience functions
-4. Refine ICP based on actual engagement patterns
-
----
-
-## 🔍 Advanced Features
-
-### Custom Prospect Export
-
-```python
-from main import LinkedInIntelligenceSystem
-
-system = LinkedInIntelligenceSystem()
-system.analyze_audience("contacts.csv")
-
-# Export prospects with custom threshold
-system.export_prospect_list(min_score=80)  # Higher bar
-```
-
-### Programmatic Access
-
-```python
-# Analyze just the post
-from partA import analyze_linkedin_post
-
-features = analyze_linkedin_post("Your post text")
-print(f"Score: {features.performance_score}")
-print(f"Prediction: {features.predicted_performance}")
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Issue: "Input CSV must have 'Name' and 'Title' columns"
-**Solution**: Ensure your CSV has exactly these column headers (case-sensitive)
-
-### Issue: Low parsing accuracy
-**Solution**: Add custom patterns in `extract_company()` function for your use case
-
-### Issue: Unexpected low scores
-**Solution**: Review `ICP_CONFIG` - ensure it matches your target audience
-
-### Issue: Missing dependencies
-**Solution**: `pip install pandas`
-
----
-
-## 📈 Best Practices
-
-### Data Collection
-- Export likers AND commenters (higher engagement signal)
-- Include full title strings (more context = better parsing)
-- Run analysis within 48 hours of post (while data is fresh)
-
-### Score Interpretation
-- **≥ 90**: Hot lead - immediate outreach
-- **70-89**: Strong fit - add to nurture campaign
-- **50-69**: Moderate fit - general content
-- **< 50**: Low priority - monitor only
-
-### Content Optimization
-- Test one variable at a time (A/B testing)
-- Track performance scores over time
-- Aim for 75+ on strategic posts
-- Balance optimization with authenticity
-
----
-
-## 📝 Notes
-
-### Parsing Accuracy
-- **Guaranteed**: 95%+ on standard titles (Head/Director/VP/CxO)
-- **Expected**: 85%+ on complex titles with multiple companies/roles
-- **Limitation**: Edge cases with non-English titles or unusual formats
-
-### Performance Benchmarks
-Based on LinkedIn best practices research:
-- Word count: 100-200 optimal (industry standard)
-- Hashtags: 3-5 recommended (LinkedIn algorithm)
-- Questions: 1.5x engagement boost (measured)
-- CTAs: Essential for conversion
-
-### Data Privacy
-- No data is sent to external APIs
-- All processing is local
-- No PII is stored beyond input CSV
-- User controls all data retention
-
----
+- Analysis and export run on-device, so very long or 4K clips take time and
+  memory — try a shorter clip first.
+- Still/scene detection is a lightweight frame-difference heuristic, not an ML
+  model; it's fast and dependency-free. For driving footage it mainly cuts truly
+  static moments (stops, held shots) — a moving road still reads as motion, which
+  is usually what you want. Use **Highlights** to aggressively condense a long
+  drive, and adjust the sliders to taste.
+- `AVAssetExportSession.exportAsynchronously`/`progress` are deprecated in
+  iOS 18 but still function; a future update can move to the iOS 18
+  `export(to:as:)` + `states(updateInterval:)` API.
