@@ -95,6 +95,8 @@ struct EditorView: View {
                 highlightControls
             }
 
+            colorControls
+
             exportArea
 
             if model.phase == .done, let url = model.resultURL {
@@ -252,6 +254,18 @@ struct EditorView: View {
         .onChange(of: model.settings.highlightTargetFraction) { _, _ in
             model.autoSelectHighlights()
         }
+    }
+
+    // MARK: Color
+
+    private var colorControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Color").font(.subheadline.weight(.semibold))
+            LookChips(selection: $model.look)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: Export

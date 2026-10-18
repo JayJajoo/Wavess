@@ -42,9 +42,10 @@ struct VideoComposer {
         return composition
     }
 
-    /// Exports an asset (optionally driven by a video composition, e.g. for reel
-    /// transitions) to a temporary `.mp4`, reporting progress `0...1`.
-    func export(_ asset: AVAsset, videoComposition: AVVideoComposition? = nil, onProgress: @escaping @Sendable (Float) -> Void) async throws -> URL {
+    /// Exports an asset (optionally driven by a video composition and/or audio
+    /// mix, e.g. for reel transitions and a music soundtrack) to a temporary
+    /// `.mp4`, reporting progress `0...1`.
+    func export(_ asset: AVAsset, videoComposition: AVVideoComposition? = nil, audioMix: AVAudioMix? = nil, onProgress: @escaping @Sendable (Float) -> Void) async throws -> URL {
         guard let session = AVAssetExportSession(
             asset: asset,
             presetName: AVAssetExportPresetHighestQuality
@@ -60,6 +61,9 @@ struct VideoComposer {
         session.shouldOptimizeForNetworkUse = true
         if let videoComposition {
             session.videoComposition = videoComposition
+        }
+        if let audioMix {
+            session.audioMix = audioMix
         }
 
         // Poll progress while the export runs.

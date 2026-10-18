@@ -10,6 +10,9 @@ struct ReelClip: Identifiable {
     let duration: Double
     var scenes: [Scene]
 
+    /// Per-clip color look override. `nil` means "use the reel-wide look".
+    var look: Look? = nil
+
     var fileName: String { url.lastPathComponent }
 
     /// Selected key scenes, in timeline order.

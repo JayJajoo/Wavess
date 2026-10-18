@@ -2,6 +2,14 @@ import AVFoundation
 import Observation
 import SwiftUI
 
+/// A beat-synced plan: where to cut, which footage fills each slot (and at what
+/// speed), and which boundaries carry a transition.
+struct MusicPlan {
+    let cutTimes: [Double]
+    let slots: [MusicSlot]
+    let transitions: [Bool]
+}
+
 /// Orchestrates building a reel from several source videos: analyzes each clip,
 /// auto-selects its key scenes, stitches them with selective transitions, and
 /// exports one combined video.
@@ -22,6 +30,31 @@ final class ReelViewModel {
     var settings = AnalysisSettings()
     var transition = TransitionSettings()
 
+    /// Color look applied to the whole reel (per-clip looks can override it).
+    var reelLook: Look = .none
+
+    // MARK: Music
+
+    private(set) var musicURL: URL?
+    private(set) var musicAsset: AVURLAsset?
+    private(set) var musicFullDuration: Double = 0
+    var musicStart: Double = 0
+    var musicSectionDuration: Double = 60
+    /// Cut the video every N beats (1 = on every beat, 4 = once per bar-ish).
+    var beatsPerCut: Int = 2
+    /// Add intelligent slow-mo / fast-forward on selected beats.
+    var speedEffectsEnabled = true
+    private(set) var musicAnalysis: MusicAnalysis?
+    var isAnalyzingMusic = false
+
+    var hasMusic: Bool { musicAsset != nil && musicAnalysis != nil }
+    var detectedBPM: Int? { musicAnalysis.map { Int($0.bpm.rounded()) } }
+
+    /// Valid range for the "music section length" slider for the loaded track.
+    var minMusicSectionDuration: Double { min(30, musicFullDuration) }
+    var maxMusicSectionDuration: Double { min(120, musicFullDuration) }
+    var maxMusicStart: Double { max(0, musicFullDuration - musicSectionDuration) }
+
     // MARK: State
 
     private(set) var clips: [ReelClip] = []
@@ -38,9 +71,11 @@ final class ReelViewModel {
         clips.reduce(0) { $0 + $1.selectedCount }
     }
 
-    /// Rough estimate of the finished reel's length: selected scene durations
-    /// minus the time removed by overlapping transitions.
+    /// Rough estimate of the finished reel's length. With music, the reel is the
+    /// length of the chosen music section; otherwise it's the kept scene
+    /// durations minus the time removed by overlapping transitions.
     var estimatedDuration: Double {
+        if hasMusic { return musicSectionDuration }
         let segments = makeSegments()
         guard !segments.isEmpty else { return 0 }
         let raw = segments.reduce(0.0) { $0 + $1.range.duration.seconds }
@@ -108,9 +143,28 @@ final class ReelViewModel {
         resultURL = nil
     }
 
+    func setClipLook(clipID: UUID, look: Look?) {
+        guard let clipIndex = clips.firstIndex(where: { $0.id == clipID }) else { return }
+        clips[clipIndex].look = look
+        resultURL = nil
+    }
+
     // MARK: - Export
 
     func export() async {
+        guard totalSelectedScenes > 0 else {
+            errorMessage = "Select at least one scene to include."
+            return
+        }
+
+        if hasMusic, let plan = makeMusicPlan(), let musicAsset {
+            await exportMusicReel(plan: plan, musicAsset: musicAsset)
+        } else {
+            await exportPlainReel()
+        }
+    }
+
+    private func exportPlainReel() async {
         let segments = makeSegments()
         guard !segments.isEmpty else {
             errorMessage = "Select at least one scene to include."
@@ -126,19 +180,101 @@ final class ReelViewModel {
             let builder = ReelBuilder()
             let (composition, videoComposition) = try await builder.build(
                 segments: segments,
-                transitionDuration: transition.duration
+                transitionDuration: transition.style == .none ? 0 : transition.duration
             )
             let url = try await VideoComposer().export(composition, videoComposition: videoComposition) { [weak self] value in
                 Task { @MainActor in self?.progress = Double(value) }
             }
-            resultURL = url
+            resultURL = try await gradedIfNeeded(url, spans: plainGradeSpans())
             statusMessage = ""
             phase = .done
         } catch {
-            errorMessage = (error as? EditorError)?.localizedDescription ?? error.localizedDescription
-            statusMessage = ""
-            phase = .ready
+            fail(error)
         }
+    }
+
+    private func exportMusicReel(plan: MusicPlan, musicAsset: AVURLAsset) async {
+        phase = .exporting
+        progress = 0
+        errorMessage = nil
+        statusMessage = "Syncing to the beat…"
+
+        do {
+            let builder = MusicReelBuilder()
+            let (composition, videoComposition, audioMix) = try await builder.build(
+                cutTimes: plan.cutTimes,
+                slots: plan.slots,
+                transitionIntoNext: plan.transitions,
+                transitionDuration: transition.style == .none ? 0 : transition.duration,
+                music: (musicAsset, musicStart)
+            )
+            let url = try await VideoComposer().export(composition, videoComposition: videoComposition, audioMix: audioMix) { [weak self] value in
+                Task { @MainActor in self?.progress = Double(value) }
+            }
+            resultURL = try await gradedIfNeeded(url, spans: musicGradeSpans(plan))
+            statusMessage = ""
+            phase = .done
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// Runs the color-grading pass if any span asks for a non-original look.
+    private func gradedIfNeeded(_ url: URL, spans: [ColorGrader.Span]) async throws -> URL {
+        guard spans.contains(where: { $0.look != .none }) else { return url }
+        statusMessage = "Applying color…"
+        progress = 0
+        return try await ColorGrader().grade(url: url, spans: spans) { [weak self] value in
+            Task { @MainActor in self?.progress = Double(value) }
+        }
+    }
+
+    private func fail(_ error: Error) {
+        errorMessage = (error as? EditorError)?.localizedDescription ?? error.localizedDescription
+        statusMessage = ""
+        phase = .ready
+    }
+
+    // MARK: - Music
+
+    func loadMusic(url: URL) async {
+        let asset = AVURLAsset(url: url)
+        guard let duration = try? await asset.load(.duration), duration.seconds > 0 else {
+            errorMessage = "Couldn't read that audio file."
+            return
+        }
+        musicURL = url
+        musicAsset = asset
+        musicFullDuration = duration.seconds
+        musicStart = 0
+        musicSectionDuration = min(60, duration.seconds)
+        await analyzeMusicSection()
+    }
+
+    func analyzeMusicSection() async {
+        guard let musicAsset else { return }
+        // Clamp the selection into the track.
+        musicSectionDuration = min(max(musicSectionDuration, minMusicSectionDuration), maxMusicSectionDuration)
+        musicStart = min(max(0, musicStart), maxMusicStart)
+
+        isAnalyzingMusic = true
+        musicAnalysis = try? await MusicAnalyzer().analyze(
+            asset: musicAsset,
+            start: musicStart,
+            duration: musicSectionDuration
+        )
+        isAnalyzingMusic = false
+        resultURL = nil
+    }
+
+    func clearMusic() {
+        musicURL = nil
+        musicAsset = nil
+        musicFullDuration = 0
+        musicStart = 0
+        musicSectionDuration = 60
+        musicAnalysis = nil
+        resultURL = nil
     }
 
     func saveResultToPhotos() async -> Bool {
@@ -159,28 +295,152 @@ final class ReelViewModel {
         statusMessage = ""
         errorMessage = nil
         resultURL = nil
+        reelLook = .none
+        clearMusic()
     }
 
     // MARK: - Helpers
 
-    /// Flattens every clip's selected scenes into ordered segments, marking each
-    /// boundary that should carry a transition.
-    func makeSegments() -> [ReelSegment] {
-        var flat: [(clipIndex: Int, asset: AVURLAsset, range: CMTimeRange)] = []
+    private struct FlatScene {
+        let asset: AVURLAsset
+        let range: CMTimeRange
+        let clipIndex: Int
+        let start: Double
+        let score: Double
+    }
+
+    /// Every clip's selected key scenes, flattened into timeline order.
+    private func makeFlat() -> [FlatScene] {
+        var flat: [FlatScene] = []
         for (clipIndex, clip) in clips.enumerated() {
             for scene in clip.selectedScenes {
-                flat.append((clipIndex, clip.asset, scene.range))
+                flat.append(FlatScene(asset: clip.asset, range: scene.range, clipIndex: clipIndex, start: scene.start, score: scene.score))
             }
+        }
+        return flat
+    }
+
+    private func wantsTransition(at index: Int, in flat: [FlatScene]) -> Bool {
+        guard index < flat.count - 1 else { return false }
+        let crossesClip = flat[index + 1].clipIndex != flat[index].clipIndex
+        return transition.wantsTransition(crossesClip: crossesClip)
+    }
+
+    /// Ordered segments for the plain (no-music) reel.
+    func makeSegments() -> [ReelSegment] {
+        let flat = makeFlat()
+        return flat.indices.map { index in
+            ReelSegment(asset: flat[index].asset, range: flat[index].range, transitionIntoNext: wantsTransition(at: index, in: flat))
+        }
+    }
+
+    // MARK: - Music plan
+
+    func makeMusicPlan() -> MusicPlan? {
+        guard let analysis = musicAnalysis else { return nil }
+        let total = musicSectionDuration
+
+        // Cut times: 0, every `beatsPerCut`-th beat (min slot 0.5s), then total.
+        let internalBeats = analysis.beats.filter { $0 > 0.15 && $0 < total - 0.15 }
+        var cuts: [Double] = [0]
+        for (i, beat) in internalBeats.enumerated() where i % max(1, beatsPerCut) == 0 {
+            if beat - (cuts.last ?? 0) >= 0.5 { cuts.append(beat) }
+        }
+        if let last = cuts.last, total - last < 0.5, cuts.count > 1 { cuts.removeLast() }
+        cuts.append(total)
+        guard cuts.count >= 2 else { return nil }
+
+        let pool = makeFlat()
+        guard !pool.isEmpty else { return nil }
+
+        let slotCount = cuts.count - 1
+        var slots: [MusicSlot] = (0..<slotCount).map { j in
+            let item = pool[j % pool.count]
+            return MusicSlot(asset: item.asset, sourceStart: item.start, clipIndex: item.clipIndex)
+        }
+        let transitions: [Bool] = (0..<slotCount).map { j in
+            guard j < slotCount - 1 else { return false }
+            let crosses = slots[j + 1].clipIndex != slots[j].clipIndex
+            return transition.wantsTransition(crossesClip: crosses)
         }
 
-        return flat.enumerated().map { index, item in
-            var wantsTransition = false
-            if index < flat.count - 1 {
-                let crossesClip = flat[index + 1].clipIndex != item.clipIndex
-                wantsTransition = transition.wantsTransition(crossesClip: crossesClip)
-            }
-            return ReelSegment(asset: item.asset, range: item.range, transitionIntoNext: wantsTransition)
+        if speedEffectsEnabled {
+            assignSpeeds(&slots, cuts: cuts, pool: pool, analysis: analysis)
         }
+
+        return MusicPlan(cutTimes: cuts, slots: slots, transitions: transitions)
+    }
+
+    /// Intelligently places slow-mo / fast-forward on a *subset* of beats:
+    /// slow-mo on strong, visually dynamic beats (drops), fast-forward through
+    /// long static stretches — never two effects back-to-back.
+    private func assignSpeeds(_ slots: inout [MusicSlot], cuts: [Double], pool: [FlatScene], analysis: MusicAnalysis) {
+        let count = slots.count
+        guard count > 2 else { return }
+
+        var beatStrength = [Double](repeating: 0.5, count: count)
+        var sceneScore = [Double](repeating: 0, count: count)
+        var slotLength = [Double](repeating: 0, count: count)
+        for j in 0..<count {
+            beatStrength[j] = analysis.strength(at: cuts[j])
+            sceneScore[j] = pool[j % pool.count].score
+            slotLength[j] = cuts[j + 1] - cuts[j]
+        }
+
+        func quantile(_ values: [Double], _ q: Double) -> Double {
+            let sorted = values.sorted()
+            guard !sorted.isEmpty else { return 0 }
+            return sorted[min(sorted.count - 1, Int(Double(sorted.count - 1) * q))]
+        }
+        let strongBeat = quantile(beatStrength, 0.8)   // top ~20% of beats
+        let highMotion = quantile(sceneScore, 0.5)     // above median motion
+        let lowMotion = quantile(sceneScore, 0.3)      // bottom ~30% motion
+        let avgLength = slotLength.reduce(0, +) / Double(count)
+
+        var previousChanged = false
+        for j in 0..<count {
+            if previousChanged { previousChanged = false; continue }
+            if beatStrength[j] >= strongBeat && sceneScore[j] >= highMotion {
+                slots[j].speed = 0.5          // dramatic slow-mo on a strong, dynamic beat
+                previousChanged = true
+            } else if sceneScore[j] <= lowMotion && slotLength[j] >= avgLength {
+                slots[j].speed = 1.8          // speed through long, static footage
+                previousChanged = true
+            }
+        }
+    }
+
+    // MARK: - Color grade spans
+
+    private func lookForClip(_ clipIndex: Int) -> Look {
+        (clipIndex < clips.count ? clips[clipIndex].look : nil) ?? reelLook
+    }
+
+    private func musicGradeSpans(_ plan: MusicPlan) -> [ColorGrader.Span] {
+        plan.slots.indices.map { j in
+            ColorGrader.Span(start: plan.cutTimes[j], end: plan.cutTimes[j + 1], look: lookForClip(plan.slots[j].clipIndex))
+        }
+    }
+
+    private func plainGradeSpans() -> [ColorGrader.Span] {
+        let flat = makeFlat()
+        guard !flat.isEmpty else { return [] }
+        let durations = flat.map { $0.range.duration.seconds }
+        let transitions = flat.indices.map { wantsTransition(at: $0, in: flat) }
+        let layout = ReelLayout.compute(
+            durations: durations,
+            transitionIntoNext: transitions,
+            transitionDuration: transition.style == .none ? 0 : transition.duration
+        )
+
+        var spans: [ColorGrader.Span] = []
+        var boundary = 0.0
+        for i in flat.indices {
+            let next = (i == flat.count - 1) ? layout.total : layout.starts[i + 1] + layout.overlaps[i] / 2
+            spans.append(ColorGrader.Span(start: boundary, end: next, look: lookForClip(flat[i].clipIndex)))
+            boundary = next
+        }
+        return spans
     }
 
     private func selectKeyScenes(_ scenes: inout [Scene], duration: Double, fraction: Double) {

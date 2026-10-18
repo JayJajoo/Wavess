@@ -10,7 +10,15 @@ stitches your videos. Two flows:
 - Stitches them into one reel with **cross-dissolve transitions applied
   selectively** — by default only where one clip hands off to the next, not at
   every cut.
-- Exports one combined video (video-only — montages get music added afterward).
+- 🎵 **Beat-synced music** — pick a 30s–2min section of a song; Wavess detects its
+  beats and tempo and cuts the clips **on the beat**, with the music as the
+  soundtrack and the reel running the length of your chosen section.
+- ⏩ **Intelligent speed ramps** — adds slow-motion on strong, dynamic beats and
+  fast-forward through long static shots, on *selected* beats only (never every
+  cut), always keeping the cut locked to the beat.
+- 🎨 **Color grading** — apply a look (Vivid, Warm, Cool, Cinematic, B&W, Vintage)
+  to the whole reel, or give individual clips their own look to grade just that
+  section.
 
 **✂️ Edit one clip**
 - 🚗 **Trim still footage** — cut stretches where almost nothing changes (a stopped
@@ -73,10 +81,15 @@ open Wavess.xcodeproj
 1. On the home screen tap **Build a Reel** and select several videos.
 2. Wavess analyzes each clip and auto-picks its key scenes. Expand any clip to
    toggle individual scenes on/off.
-3. Set the **transitions**: style (dissolve / hard cut), when they apply
-   (*between clips* — the default — or *every scene*), the transition length, and
-   how much of each clip to keep (**key scenes per clip**).
-4. Tap **Build reel**, then **Save to Photos** or **Share**.
+3. *(Optional)* **Add music** — pick a song, choose the start and a 30s–2min
+   section, set **cut every N beats**, and toggle **speed ramps**. The reel will
+   sync to the beat and run the length of the section.
+4. Set the **transitions**: style (dissolve / hard cut), when they apply
+   (*between clips* — the default — or *every scene*), and the transition length.
+   (Without music, also set **key scenes per clip**.)
+5. *(Optional)* **Color** — pick a reel-wide look, and/or give any clip its own
+   look to grade just that section.
+6. Tap **Build reel**, then **Save to Photos** or **Share**.
 
 ### Edit one clip
 
@@ -102,7 +115,11 @@ Slider tweaks recompute instantly from the cached frame sample — no re-scan.
 | Highlight scoring | Score each scene by average visual change × length; auto-select the top scenes to hit a target duration | `Services/SceneDetector.swift`, `ViewModels/EditorViewModel.swift` |
 | Silence detection | Decode audio to mono 16 kHz PCM, compute per-window RMS → dBFS, threshold into silent ranges | `Services/SilenceDetector.swift` |
 | Reel + transitions | Flatten key scenes across clips; alternate two video tracks, overlap selectively, ramp opacity for cross-dissolves, fit each source into a common render size | `Services/ReelBuilder.swift` |
-| Assembly & export | Build an `AVMutableComposition` (+ `AVVideoComposition` for reels), preserve orientation, export `.mp4` via `AVAssetExportSession` | `Services/VideoComposer.swift` |
+| Beat detection | Decode the music section to PCM → energy-flux onset envelope → autocorrelation for tempo + phase search → an even beat grid (no FFT) | `Services/MusicAnalyzer.swift` |
+| Beat-synced reel | Place cuts on the beat grid; center transitions on the beat; apply per-slot speed via `scaleTimeRange` while keeping the slot on-beat; lay the music under it with fades | `Services/MusicReelBuilder.swift` |
+| Speed selection | Score each beat by music strength × scene motion; slow-mo on strong dynamic beats, fast-forward through long static shots, never back-to-back | `ViewModels/ReelViewModel.swift` |
+| Color grading | Second pass: `AVVideoComposition` with a CIFilter handler that picks a look per time range (whole video or per clip/section) | `Services/ColorGrader.swift` |
+| Assembly & export | Build an `AVMutableComposition` (+ `AVVideoComposition` / `AVAudioMix`), preserve orientation, export `.mp4` via `AVAssetExportSession` | `Services/VideoComposer.swift` |
 
 ### Project layout
 
@@ -112,31 +129,38 @@ Wavess/
 ├── Models/
 │   ├── AnalysisSettings.swift Tunable thresholds (exposed as sliders)
 │   ├── Scene.swift            Scene model + error types
-│   ├── ReelClip.swift         One source clip in a reel + its scenes
-│   └── TransitionSettings.swift  Transition style / frequency / length
+│   ├── ReelClip.swift         One source clip in a reel + its scenes + look
+│   ├── TransitionSettings.swift  Transition style / frequency / length
+│   └── Look.swift             Color-grading presets
 ├── Services/
 │   ├── FrameSampler.swift     Shared frame sampling + motion signal
 │   ├── MotionAnalyzer.swift   Still / low-motion detection (visual)
 │   ├── SceneDetector.swift    Scene detection + highlight scoring
 │   ├── SilenceDetector.swift  Audio RMS/dB silence analysis
+│   ├── MusicAnalyzer.swift    Beat/tempo detection for a music section
 │   ├── ReelBuilder.swift      Multi-clip stitch + cross-dissolve transitions
+│   ├── MusicReelBuilder.swift Beat-synced stitch + speed ramps + music track
+│   ├── ColorGrader.swift      Time-ranged color grading (CIFilter pass)
 │   ├── VideoComposer.swift    Composition assembly + export
 │   └── PhotoSaver.swift       Save result to the photo library
 ├── ViewModels/
-│   ├── EditorViewModel.swift  Single-clip: analysis, selection, export
-│   └── ReelViewModel.swift    Reel: per-clip analysis, key scenes, export
+│   ├── EditorViewModel.swift  Single-clip: analysis, selection, look, export
+│   └── ReelViewModel.swift    Reel: per-clip analysis, music plan, speed, grade
 ├── Views/
 │   ├── ContentView.swift      Root + home routing (editor ↔ reel)
 │   ├── ImportView.swift       Home screen (two entry points)
 │   ├── EditorView.swift       Single-clip editor
-│   ├── ReelView.swift         Reel builder (clips, transitions, export)
+│   ├── ReelView.swift         Reel builder (clips, music, transitions, color)
 │   ├── TimelineView.swift     Visual keep/cut timeline
-│   ├── SharedComponents.swift PlayerCard, LabeledSlider, SceneRow, ScoreBar
+│   ├── SharedComponents.swift PlayerCard, LabeledSlider, SceneRow, LookChips…
 │   ├── VideoPicker.swift      PHPicker bridge → one local file URL
 │   ├── MultiVideoPicker.swift PHPicker bridge → multiple file URLs
+│   ├── AudioPicker.swift      Document picker → music file URL
 │   └── ShareSheet.swift       UIActivityViewController bridge
 └── Utilities/
     ├── TimeRangeMath.swift    Invert / merge / pad CMTimeRanges
+    ├── ReelLayout.swift       Plain-reel timeline layout (for grade spans)
+    ├── VideoGeometry.swift    Orientation + aspect-fit transforms
     ├── CGImage+Pixels.swift   Grayscale signatures + frame diffing
     └── Formatting.swift       Timecode formatting
 ```

@@ -8,6 +8,7 @@ struct ReelView: View {
     @State private var showShareSheet = false
     @State private var showSavedConfirmation = false
     @State private var isSaving = false
+    @State private var showAudioPicker = false
 
     var body: some View {
         ScrollView {
@@ -16,7 +17,9 @@ struct ReelView: View {
                     analyzingCard
                 } else if !model.clips.isEmpty {
                     statsCard
+                    musicCard
                     transitionCard
+                    colorCard
 
                     ForEach(model.clips) { clip in
                         clipCard(clip)
@@ -31,6 +34,18 @@ struct ReelView: View {
             }
             .padding(.horizontal)
             .padding(.bottom, 32)
+        }
+        .sheet(isPresented: $showAudioPicker) {
+            AudioPicker(
+                onPick: { url in
+                    showAudioPicker = false
+                    Task { await model.loadMusic(url: url) }
+                },
+                onError: { message in
+                    showAudioPicker = false
+                    model.errorMessage = message
+                }
+            )
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -87,6 +102,102 @@ struct ReelView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Music
+
+    private var musicCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Music").font(.subheadline.weight(.semibold))
+                Spacer()
+                if model.musicAsset != nil {
+                    Button("Remove") { model.clearMusic() }.font(.caption)
+                }
+            }
+
+            if model.musicAsset == nil {
+                Button { showAudioPicker = true } label: {
+                    Label("Add music", systemImage: "music.note")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                Text("Pick a song — the cuts, transitions and speed ramps sync to its beat, and the reel runs as long as your chosen section.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(model.musicURL?.lastPathComponent ?? "Music")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if model.isAnalyzingMusic {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Analyzing beats…").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else if let bpm = model.detectedBPM {
+                    Label("~\(bpm) BPM detected", systemImage: "metronome")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if model.maxMusicStart > 0 {
+                    LabeledSlider(
+                        title: "Start",
+                        value: $model.musicStart,
+                        range: 0 ... model.maxMusicStart,
+                        step: 1,
+                        display: Formatting.timecode(model.musicStart),
+                        onCommit: { Task { await model.analyzeMusicSection() } }
+                    )
+                }
+                if model.maxMusicSectionDuration > model.minMusicSectionDuration {
+                    LabeledSlider(
+                        title: "Section length",
+                        value: $model.musicSectionDuration,
+                        range: model.minMusicSectionDuration ... model.maxMusicSectionDuration,
+                        step: 5,
+                        display: Formatting.timecode(model.musicSectionDuration),
+                        onCommit: { Task { await model.analyzeMusicSection() } }
+                    )
+                }
+
+                Picker("Cut every", selection: $model.beatsPerCut) {
+                    Text("1 beat").tag(1)
+                    Text("2 beats").tag(2)
+                    Text("4 beats").tag(4)
+                }
+                .pickerStyle(.segmented)
+
+                Toggle("Speed ramps (slow-mo / fast-forward)", isOn: $model.speedEffectsEnabled)
+                    .font(.subheadline)
+
+                Text("Speed ramps are added only on intelligently chosen beats — strong beats get slow-mo, long static shots get sped up.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Color
+
+    private var colorCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Color").font(.subheadline.weight(.semibold))
+            LookChips(selection: $model.reelLook)
+            Text("Applies to the whole reel. Give any clip below its own look to grade just that section.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Transitions
@@ -173,6 +284,22 @@ struct ReelView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: "paintpalette")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Menu {
+                    Button("Match reel") { model.setClipLook(clipID: clip.id, look: nil) }
+                    ForEach(Look.allCases) { look in
+                        Button(look.rawValue) { model.setClipLook(clipID: clip.id, look: look) }
+                    }
+                } label: {
+                    Text("Look: \(clip.look?.rawValue ?? "Match reel")")
+                        .font(.caption)
+                }
+                Spacer()
             }
         }
         .padding()

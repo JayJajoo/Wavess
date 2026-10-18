@@ -52,7 +52,9 @@ struct ReelBuilder {
 
         // Canonical render size from the first segment's oriented size.
         let first = info(for: segments[0])
-        let renderSize = evenSize(orientedSize(natural: first.naturalSize, transform: first.preferredTransform))
+        let renderSize = VideoGeometry.evenSize(
+            VideoGeometry.orientedSize(natural: first.naturalSize, transform: first.preferredTransform)
+        )
 
         let composition = AVMutableComposition()
         guard
@@ -96,7 +98,7 @@ struct ReelBuilder {
         // Precompute each segment's fit transform.
         let transforms: [CGAffineTransform] = segments.map {
             let source = info(for: $0)
-            return fitTransform(natural: source.naturalSize, preferred: source.preferredTransform, into: renderSize)
+            return VideoGeometry.fitTransform(natural: source.naturalSize, preferred: source.preferredTransform, into: renderSize)
         }
 
         // Build contiguous instructions: a pass-through per segment's solo region,
@@ -146,35 +148,5 @@ struct ReelBuilder {
         videoComposition.instructions = instructions
 
         return (composition, videoComposition)
-    }
-
-    // MARK: - Geometry
-
-    private func orientedSize(natural: CGSize, transform: CGAffineTransform) -> CGSize {
-        let rect = CGRect(origin: .zero, size: natural).applying(transform)
-        return CGSize(width: abs(rect.width), height: abs(rect.height))
-    }
-
-    private func evenSize(_ size: CGSize) -> CGSize {
-        func even(_ value: CGFloat) -> CGFloat {
-            let rounded = Int(value.rounded())
-            return CGFloat(max(2, rounded - (rounded % 2)))
-        }
-        return CGSize(width: even(size.width), height: even(size.height))
-    }
-
-    /// Transform that bakes in the source orientation and aspect-fits it into the
-    /// render size, centered (letterboxed if aspect ratios differ).
-    private func fitTransform(natural: CGSize, preferred: CGAffineTransform, into renderSize: CGSize) -> CGAffineTransform {
-        let oriented = orientedSize(natural: natural, transform: preferred)
-        guard oriented.width > 0, oriented.height > 0 else { return preferred }
-
-        let scale = min(renderSize.width / oriented.width, renderSize.height / oriented.height)
-        let tx = (renderSize.width - oriented.width * scale) / 2
-        let ty = (renderSize.height - oriented.height * scale) / 2
-
-        let fit = CGAffineTransform(scaleX: scale, y: scale)
-            .concatenating(CGAffineTransform(translationX: tx, y: ty))
-        return preferred.concatenating(fit)
     }
 }

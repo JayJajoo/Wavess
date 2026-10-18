@@ -42,6 +42,8 @@ final class EditorViewModel {
 
     var settings = AnalysisSettings()
     var mode: Mode = .trimStill
+    /// Color look applied to the exported clip.
+    var look: Look = .none
 
     // MARK: Analysis results
 
@@ -211,7 +213,19 @@ final class EditorViewModel {
             let url = try await composer.export(composition) { [weak self] value in
                 Task { @MainActor in self?.progress = Double(value) }
             }
-            resultURL = url
+
+            if look != .none {
+                statusMessage = "Applying color…"
+                progress = 0
+                resultURL = try await ColorGrader().grade(
+                    url: url,
+                    spans: [ColorGrader.Span(start: 0, end: .greatestFiniteMagnitude, look: look)]
+                ) { [weak self] value in
+                    Task { @MainActor in self?.progress = Double(value) }
+                }
+            } else {
+                resultURL = url
+            }
             statusMessage = ""
             phase = .done
         } catch {

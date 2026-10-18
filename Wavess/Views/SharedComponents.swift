@@ -78,6 +78,43 @@ struct SceneRow: View {
     }
 }
 
+/// A horizontal row of color-look chips bound to a selection.
+struct LookChips: View {
+    @Binding var selection: Look
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Look.allCases) { look in
+                    let isOn = look == selection
+                    Button { selection = look } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: look.symbol)
+                                .font(.title3)
+                            Text(look.rawValue)
+                                .font(.caption2)
+                                .lineLimit(1)
+                        }
+                        .frame(width: 70, height: 56)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(isOn ? Color.accentColor.opacity(0.22) : Color.secondary.opacity(0.12))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(isOn ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                        )
+                        .foregroundStyle(isOn ? Color.accentColor : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
+        }
+    }
+}
+
 /// A tiny 5-dot meter visualizing a scene's relative "interest" score.
 struct ScoreBar: View {
     let score: Double
