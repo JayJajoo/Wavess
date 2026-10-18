@@ -165,6 +165,32 @@ struct ReelView: View {
                     )
                 }
 
+                // Listen to the chosen section and scrub within it.
+                HStack(spacing: 12) {
+                    Button { model.togglePreview() } label: {
+                        Image(systemName: model.isPreviewingMusic ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+
+                    Slider(
+                        value: Binding(
+                            get: { min(max(model.previewTime, model.musicStart), model.musicEnd) },
+                            set: { model.seekPreview(to: $0) }
+                        ),
+                        in: model.musicStart ... max(model.musicStart + 0.1, model.musicEnd)
+                    )
+
+                    Text(Formatting.timecode(model.previewTime))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+                Text("Preview your section — tap play and drag the dot to hear where the music starts, plays and ends.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
                 Picker("Cut every", selection: $model.beatsPerCut) {
                     Text("1 beat").tag(1)
                     Text("2 beats").tag(2)
@@ -211,11 +237,17 @@ struct ReelView: View {
             }
             .pickerStyle(.segmented)
 
+            if model.transition.style == .auto {
+                Text("Wavess picks the transition for each cut from the beat and the scenes — punchy cuts on strong beats, smooth blends between clips.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Picker("When", selection: $model.transition.frequency) {
                 ForEach(TransitionSettings.Frequency.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            .disabled(model.transition.style == .none)
+            .disabled(model.transition.style == .none || model.transition.style == .auto)
 
             LabeledSlider(
                 title: "Transition length",

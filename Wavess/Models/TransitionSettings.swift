@@ -4,19 +4,25 @@ import Foundation
 struct TransitionSettings: Equatable {
 
     enum Style: String, CaseIterable, Identifiable {
+        case auto = "Auto"
         case crossDissolve = "Dissolve"
         case fadeToBlack = "Fade"
         case slide = "Slide"
         case none = "Cut"
         var id: String { rawValue }
 
-        /// The rendering effect for this style (nil = a hard cut, no transition).
+        /// Whether this style lets Wavess choose the transition per boundary from
+        /// the analysis, rather than using one fixed effect everywhere.
+        var isAuto: Bool { self == .auto }
+
+        /// The fixed rendering effect for this style (nil = a hard cut). `.auto`
+        /// falls back to a dissolve where a single effect is needed.
         var effect: ReelTransition? {
             switch self {
-            case .crossDissolve: return .crossDissolve
-            case .fadeToBlack:   return .fadeToBlack
-            case .slide:         return .slide
-            case .none:          return nil
+            case .auto, .crossDissolve: return .crossDissolve
+            case .fadeToBlack:          return .fadeToBlack
+            case .slide:                return .slide
+            case .none:                 return nil
             }
         }
     }
@@ -29,7 +35,7 @@ struct TransitionSettings: Equatable {
         var id: String { rawValue }
     }
 
-    var style: Style = .crossDissolve
+    var style: Style = .auto
     var frequency: Frequency = .betweenClips
 
     /// Transition length in seconds (clamped per-boundary so short scenes stay valid).

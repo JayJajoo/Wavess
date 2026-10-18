@@ -7,7 +7,9 @@ import SwiftUI
 struct MusicPlan {
     let cutTimes: [Double]
     let slots: [MusicSlot]
-    let transitions: [Bool]
+    /// Per-boundary transition effect (index j = from slot j into j+1). `nil`
+    /// means a hard cut at that boundary; the last entry is always `nil`.
+    let transitions: [ReelTransition?]
 }
 
 /// Orchestrates building a reel from several source videos: analyzes each clip,
@@ -46,6 +48,15 @@ final class ReelViewModel {
     var speedEffectsEnabled = true
     private(set) var musicAnalysis: MusicAnalysis?
     var isAnalyzingMusic = false
+
+    // MARK: Music preview playback
+    private var previewPlayer: AVAudioPlayer?
+    private var previewTimer: Timer?
+    /// Whether the section preview is currently playing.
+    var isPreviewingMusic = false
+    /// Current playhead, in absolute seconds within the track (kept inside the
+    /// chosen start…end section). Drives — and is driven by — the scrubber.
+    var previewTime: Double = 0
 
     var hasMusic: Bool { musicAsset != nil && musicAnalysis != nil }
     var detectedBPM: Int? { musicAnalysis.map { Int($0.bpm.rounded()) } }
@@ -171,6 +182,7 @@ final class ReelViewModel {
     // MARK: - Export
 
     func export() async {
+        stopPreview()
         guard totalSelectedScenes > 0 else {
             errorMessage = "Select at least one scene to include."
             return
@@ -224,9 +236,8 @@ final class ReelViewModel {
             let (composition, videoComposition, audioMix) = try await builder.build(
                 cutTimes: plan.cutTimes,
                 slots: plan.slots,
-                transitionIntoNext: plan.transitions,
+                boundaryTransitions: plan.transitions,
                 transitionDuration: transition.style == .none ? 0 : transition.duration,
-                transition: transition.style.effect ?? .crossDissolve,
                 music: (musicAsset, musicStart)
             )
             let url = try await VideoComposer().export(composition, videoComposition: videoComposition, audioMix: audioMix) { [weak self] value in
@@ -278,6 +289,10 @@ final class ReelViewModel {
         musicSectionDuration = min(max(musicSectionDuration, minMusicSectionDuration), maxMusicSectionDuration)
         musicStart = min(max(0, musicStart), maxMusicStart)
 
+        // The section moved — snap the preview playhead back to the new start.
+        pausePreview()
+        previewTime = musicStart
+
         isAnalyzingMusic = true
         musicAnalysis = try? await MusicAnalyzer().analyze(
             asset: musicAsset,
@@ -289,6 +304,8 @@ final class ReelViewModel {
     }
 
     func clearMusic() {
+        stopPreview()
+        previewTime = 0
         musicURL = nil
         musicAsset = nil
         musicFullDuration = 0
@@ -296,6 +313,63 @@ final class ReelViewModel {
         musicSectionDuration = 60
         musicAnalysis = nil
         resultURL = nil
+    }
+
+    // MARK: - Music preview
+
+    /// Play / pause the section preview.
+    func togglePreview() {
+        isPreviewingMusic ? pausePreview() : startPreview()
+    }
+
+    func startPreview() {
+        guard let musicURL else { return }
+        if previewPlayer == nil {
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            previewPlayer = try? AVAudioPlayer(contentsOf: musicURL)
+            previewPlayer?.prepareToPlay()
+        }
+        guard let player = previewPlayer else { return }
+        if previewTime < musicStart || previewTime >= musicEnd { previewTime = musicStart }
+        player.currentTime = previewTime
+        player.play()
+        isPreviewingMusic = true
+
+        previewTimer?.invalidate()
+        previewTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tickPreview() }
+        }
+    }
+
+    func pausePreview() {
+        previewPlayer?.pause()
+        isPreviewingMusic = false
+        previewTimer?.invalidate()
+        previewTimer = nil
+    }
+
+    func stopPreview() {
+        previewPlayer?.stop()
+        previewPlayer = nil
+        isPreviewingMusic = false
+        previewTimer?.invalidate()
+        previewTimer = nil
+    }
+
+    /// Move the playhead (from the scrubber); plays on from there if previewing.
+    func seekPreview(to time: Double) {
+        let clamped = min(max(time, musicStart), max(musicStart, musicEnd))
+        previewTime = clamped
+        previewPlayer?.currentTime = clamped
+    }
+
+    private func tickPreview() {
+        guard let player = previewPlayer, isPreviewingMusic else { return }
+        previewTime = player.currentTime
+        if previewTime >= musicEnd {           // loop within the chosen section
+            seekPreview(to: musicStart)
+        }
     }
 
     func saveResultToPhotos() async -> Bool {
@@ -382,56 +456,99 @@ final class ReelViewModel {
         guard let analysis = musicAnalysis else { return nil }
         let total = musicSectionDuration
 
-        // Cut times: 0, every `beatsPerCut`-th beat (min slot 0.5s), then total.
+        // The beat grid we can cut on: 0, every internal beat, then the section end.
         let internalBeats = analysis.beats.filter { $0 > 0.15 && $0 < total - 0.15 }
-        var cuts: [Double] = [0]
-        for (i, beat) in internalBeats.enumerated() where i % max(1, beatsPerCut) == 0 {
-            if beat - (cuts.last ?? 0) >= 0.5 { cuts.append(beat) }
-        }
-        if let last = cuts.last, total - last < 0.5, cuts.count > 1 { cuts.removeLast() }
-        cuts.append(total)
-        guard cuts.count >= 2 else { return nil }
+        let grid = Array(Set([0] + internalBeats + [total])).sorted()
+        let intervals = grid.count - 1
+        guard intervals >= 1 else { return nil }
 
-        let slotCount = cuts.count - 1
-
-        // Fill one scene per beat slot. Source footage is virtually always
-        // longer than the chosen song section, so when the selected key scenes
-        // don't cover every slot we top the pool up with the next best-scoring
-        // scenes instead of just repeating the few selected ones — a longer clip
-        // then fills the song with distinct footage.
-        let pool = makeMusicPool(slotCount: slotCount)
+        // One distinct scene per beat interval where possible (long clips fill the
+        // song with varied footage rather than repeating a handful).
+        let pool = makeMusicPool(slotCount: intervals)
         guard !pool.isEmpty else { return nil }
+        let maxScore = pool.map(\.score).max() ?? 0
 
-        var slots: [MusicSlot] = (0..<slotCount).map { j in
-            let item = pool[j % pool.count]
-            return MusicSlot(asset: item.asset, sourceStart: item.start, clipIndex: item.clipIndex)
+        // Walk the grid, giving each scene a beat span that scales with its
+        // quality: high-scoring shots linger over more beats, filler gets quick
+        // cuts — every cut still lands on a beat (content-aware pacing).
+        let baseline = Double(max(1, beatsPerCut))
+        var cuts: [Double] = [grid[0]]
+        var chosen: [FlatScene] = []
+        var cursor = 0
+        var index = 0
+        while cursor < intervals {
+            let scene = pool[index % pool.count]
+            let norm = maxScore > 0 ? max(0, min(1, scene.score / maxScore)) : 0.5
+            let span = max(1, Int((baseline * (0.5 + norm)).rounded()))  // ~0.5x…1.5x baseline
+            var next = min(cursor + span, intervals)
+            while next < intervals && grid[next] - grid[cursor] < 0.5 { next += 1 }   // keep slots ≥ 0.5s
+            if next < intervals && grid[intervals] - grid[next] < 0.5 { next = intervals }  // no tiny tail
+            cuts.append(grid[next])
+            chosen.append(scene)
+            cursor = next
+            index += 1
         }
-        let transitions: [Bool] = (0..<slotCount).map { j in
-            guard j < slotCount - 1 else { return false }
+        guard !chosen.isEmpty, cuts.count == chosen.count + 1 else { return nil }
+
+        var slots: [MusicSlot] = chosen.map {
+            MusicSlot(asset: $0.asset, sourceStart: $0.start, clipIndex: $0.clipIndex)
+        }
+        let sceneScores: [Double] = chosen.map { maxScore > 0 ? max(0, min(1, $0.score / maxScore)) : 0.5 }
+
+        // Normalised beat strength at each internal boundary, for the transition
+        // and speed decisions below.
+        let boundaryStrength: [Double] = (0..<max(0, slots.count - 1)).map { analysis.strength(at: cuts[$0 + 1]) }
+        let maxStrength = boundaryStrength.max() ?? 0
+
+        // Per-boundary transition: Auto analyses each stitch; a fixed style uses
+        // the frequency rule; the last boundary is always nil.
+        let transitions: [ReelTransition?] = (0..<slots.count).map { j in
+            guard j < slots.count - 1 else { return nil }
             let crosses = slots[j + 1].clipIndex != slots[j].clipIndex
-            return transition.wantsTransition(crossesClip: crosses)
+            if transition.style.isAuto {
+                let strengthNorm = maxStrength > 0 ? boundaryStrength[j] / maxStrength : 0.5
+                return autoTransition(strengthNorm: strengthNorm, crosses: crosses,
+                                      scoreA: sceneScores[j], scoreB: sceneScores[j + 1])
+            } else {
+                guard transition.wantsTransition(crossesClip: crosses) else { return nil }
+                return transition.style.effect
+            }
         }
 
         if speedEffectsEnabled {
-            assignSpeeds(&slots, cuts: cuts, pool: pool, analysis: analysis)
+            assignSpeeds(&slots, cuts: cuts, sceneScores: sceneScores, analysis: analysis)
         }
 
         return MusicPlan(cutTimes: cuts, slots: slots, transitions: transitions)
     }
 
+    /// Picks a transition for one stitch from the analysis (not at random):
+    /// strong beats punch (hard cut within a clip, energetic slide across clips),
+    /// softer clip changes blend (dissolve, or dip-to-black when quality dips),
+    /// and gentle in-clip boundaries get a soft dissolve or a clean cut.
+    private func autoTransition(strengthNorm: Double, crosses: Bool, scoreA: Double, scoreB: Double) -> ReelTransition? {
+        if strengthNorm > 0.75 {
+            return crosses ? .slide : nil          // punch on the strong beat
+        } else if crosses {
+            return min(scoreA, scoreB) < 0.4 ? .fadeToBlack : .crossDissolve
+        } else {
+            return strengthNorm < 0.4 ? .crossDissolve : nil
+        }
+    }
+
     /// Intelligently places slow-mo / fast-forward on a *subset* of beats:
     /// slow-mo on strong, visually dynamic beats (drops), fast-forward through
     /// long static stretches — never two effects back-to-back.
-    private func assignSpeeds(_ slots: inout [MusicSlot], cuts: [Double], pool: [FlatScene], analysis: MusicAnalysis) {
+    private func assignSpeeds(_ slots: inout [MusicSlot], cuts: [Double], sceneScores: [Double], analysis: MusicAnalysis) {
         let count = slots.count
-        guard count > 2 else { return }
+        guard count > 2, sceneScores.count == count else { return }
 
         var beatStrength = [Double](repeating: 0.5, count: count)
         var sceneScore = [Double](repeating: 0, count: count)
         var slotLength = [Double](repeating: 0, count: count)
         for j in 0..<count {
             beatStrength[j] = analysis.strength(at: cuts[j])
-            sceneScore[j] = pool[j % pool.count].score
+            sceneScore[j] = sceneScores[j]
             slotLength[j] = cuts[j + 1] - cuts[j]
         }
 
