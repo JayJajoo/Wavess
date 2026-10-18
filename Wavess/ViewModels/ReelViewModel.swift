@@ -123,9 +123,19 @@ final class ReelViewModel {
         var loaded: [ReelClip] = []
         for (index, url) in urls.enumerated() {
             progress = Double(index) / Double(urls.count)
-            statusMessage = "Analyzing clip \(index + 1) of \(urls.count)…"
+            statusMessage = "Analyzing item \(index + 1) of \(urls.count)…"
 
-            let asset = AVURLAsset(url: url)
+            // Photos arrive as images — turn each into a short still video so it
+            // flows through the same analysis/compose pipeline as a video clip
+            // and keeps its place in the selected order (photos between videos).
+            var clipURL = url
+            let hasVideoTrack = ((try? await AVURLAsset(url: url).loadTracks(withMediaType: .video))?.isEmpty == false)
+            if !hasVideoTrack {
+                guard let stillURL = await ImageClipMaker.makeStillVideo(from: url) else { continue }
+                clipURL = stillURL
+            }
+
+            let asset = AVURLAsset(url: clipURL)
             guard let duration = try? await asset.load(.duration), duration.seconds > 0 else { continue }
 
             let frames = await FrameSampler().sample(asset: asset, total: duration, fps: settings.sampleFPS)
@@ -138,7 +148,7 @@ final class ReelViewModel {
 
             selectKeyScenes(&scenes, duration: duration.seconds, fraction: transition.perClipFraction)
 
-            loaded.append(ReelClip(url: url, asset: asset, duration: duration.seconds, scenes: scenes))
+            loaded.append(ReelClip(url: clipURL, asset: asset, duration: duration.seconds, scenes: scenes))
         }
 
         clips = loaded
@@ -147,7 +157,7 @@ final class ReelViewModel {
         resultURL = nil
 
         if clips.isEmpty {
-            errorMessage = "Couldn't read the selected videos."
+            errorMessage = "Couldn't read the selected photos or videos."
             phase = .empty
         } else {
             phase = .ready
