@@ -529,26 +529,42 @@ final class ReelViewModel {
             return 1 + (1 - energyEnvelope[nearest]) * 3   // loud → ~1 beat/cut, quiet → ~4
         }
 
-        // Fill the chosen section ONCE, in order: place scenes until the music runs
-        // out. The reel never grows past the section (so it matches your music
-        // length), and scenes keep their selected/timeline order — no reordering.
-        var cuts: [Double] = [0]
-        var chosen: [FlatScene] = []
-        var cursor = 0
-        var poolIndex = 0
-        while cursor < baseIntervals && poolIndex < pool.count {
-            let item = pool[poolIndex]
-            let norm = maxScore > 0 ? max(0, min(1, item.score / maxScore)) : 0.5
-            let baseline = autoPace ? autoBeats(sectionTime: baseGrid[cursor]) : Double(max(1, beatsPerCut))
-            let span = max(1, Int((baseline * (0.5 + norm)).rounded()))
-            var next = min(cursor + span, baseIntervals)
-            while next < baseIntervals && baseGrid[next] - baseGrid[cursor] < 0.5 { next += 1 }        // slots ≥ 0.5s
-            if next < baseIntervals && baseGrid[baseIntervals] - baseGrid[next] < 0.5 { next = baseIntervals }  // no tiny tail
-            cuts.append(baseGrid[next])
-            chosen.append(item)
-            cursor = next
-            poolIndex += 1
+        // Fill the chosen section ONCE, in order, with a given set of scenes. The
+        // reel never grows past the section, and scenes keep their order.
+        func fillSection(_ items: [FlatScene]) -> (cuts: [Double], chosen: [FlatScene], filled: Bool) {
+            var cuts: [Double] = [0]
+            var chosen: [FlatScene] = []
+            var cursor = 0
+            var index = 0
+            while cursor < baseIntervals && index < items.count {
+                let item = items[index]
+                let norm = maxScore > 0 ? max(0, min(1, item.score / maxScore)) : 0.5
+                let baseline = autoPace ? autoBeats(sectionTime: baseGrid[cursor]) : Double(max(1, beatsPerCut))
+                let span = max(1, Int((baseline * (0.5 + norm)).rounded()))
+                var next = min(cursor + span, baseIntervals)
+                while next < baseIntervals && baseGrid[next] - baseGrid[cursor] < 0.5 { next += 1 }        // slots ≥ 0.5s
+                if next < baseIntervals && baseGrid[baseIntervals] - baseGrid[next] < 0.5 { next = baseIntervals }  // no tiny tail
+                cuts.append(baseGrid[next])
+                chosen.append(item)
+                cursor = next
+                index += 1
+            }
+            return (cuts, chosen, cursor >= baseIntervals)
         }
+
+        var (cuts, chosen, filledSection) = fillSection(pool)
+
+        // If the section filled before using the whole selection, don't just drop
+        // the tail (that would lose the later clips) — thin the selection EVENLY so
+        // what's kept is spread across all clips, then refill.
+        if filledSection && chosen.count < pool.count {
+            let keep = chosen.count
+            let thinned = (0..<keep).map { i -> FlatScene in
+                pool[min(pool.count - 1, Int(Double(i) * Double(pool.count) / Double(keep)))]
+            }
+            (cuts, chosen, _) = fillSection(thinned)
+        }
+
         guard !chosen.isEmpty, cuts.count == chosen.count + 1 else { return nil }
 
         // Mark the slot that lands on the drop (hard cut + slow-mo applied below) —
