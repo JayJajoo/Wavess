@@ -349,6 +349,27 @@ final class ReelViewModel {
 
     // MARK: - Music plan
 
+    /// Scene pool for the music plan: the user's selected key scenes, topped up
+    /// with the best remaining scenes (across all clips, highest score first)
+    /// when there are more beat slots than selected scenes — so a long clip
+    /// fills the song with distinct footage instead of repeating a handful.
+    private func makeMusicPool(slotCount: Int) -> [FlatScene] {
+        let selected = makeFlat()
+        guard selected.count < slotCount else { return selected }
+
+        var extras: [FlatScene] = []
+        for (clipIndex, clip) in clips.enumerated() {
+            for scene in clip.scenes where !scene.isSelected {
+                extras.append(FlatScene(asset: clip.asset, range: scene.range, clipIndex: clipIndex, start: scene.start, score: scene.score))
+            }
+        }
+        extras.sort { $0.score > $1.score }
+
+        var pool = selected + Array(extras.prefix(slotCount - selected.count))
+        pool.sort { ($0.clipIndex, $0.start) < ($1.clipIndex, $1.start) }
+        return pool
+    }
+
     func makeMusicPlan() -> MusicPlan? {
         guard let analysis = musicAnalysis else { return nil }
         let total = musicSectionDuration
@@ -363,10 +384,16 @@ final class ReelViewModel {
         cuts.append(total)
         guard cuts.count >= 2 else { return nil }
 
-        let pool = makeFlat()
+        let slotCount = cuts.count - 1
+
+        // Fill one scene per beat slot. Source footage is virtually always
+        // longer than the chosen song section, so when the selected key scenes
+        // don't cover every slot we top the pool up with the next best-scoring
+        // scenes instead of just repeating the few selected ones — a longer clip
+        // then fills the song with distinct footage.
+        let pool = makeMusicPool(slotCount: slotCount)
         guard !pool.isEmpty else { return nil }
 
-        let slotCount = cuts.count - 1
         var slots: [MusicSlot] = (0..<slotCount).map { j in
             let item = pool[j % pool.count]
             return MusicSlot(asset: item.asset, sourceStart: item.start, clipIndex: item.clipIndex)
