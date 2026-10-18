@@ -13,23 +13,48 @@ import Vision
 /// crash the analysis pipeline.
 struct VisionSceneScorer {
 
+    /// How many scenes to actually run Vision on per clip. A long clip can have
+    /// hundreds of scenes; scoring every one across a large batch is what blows
+    /// memory/time, so we evenly sample up to this many and give the rest the
+    /// average (neutral) score.
+    private let maxScenesScored = 16
+
     /// Content score in `0...1` for each scene, in the same order.
     func score(asset: AVURLAsset, scenes: [Scene]) async -> [Double] {
         guard !scenes.isEmpty else { return [] }
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 512, height: 512)
+        generator.maximumSize = CGSize(width: 384, height: 384)
         let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
         generator.requestedTimeToleranceBefore = tolerance
         generator.requestedTimeToleranceAfter = tolerance
 
-        var scores = [Double](repeating: 0, count: scenes.count)
-        for (index, scene) in scenes.enumerated() {
-            let midpoint = (scene.start + scene.end) / 2
-            guard let image = try? await cgImage(generator, atSeconds: midpoint) else { continue }
-            scores[index] = contentScore(for: image)
+        // Pick which scene indices to score (evenly sampled when there are many).
+        let indices: [Int]
+        if scenes.count <= maxScenesScored {
+            indices = Array(scenes.indices)
+        } else {
+            indices = (0..<maxScenesScored).map {
+                Int((Double($0) * Double(scenes.count - 1) / Double(maxScenesScored - 1)).rounded())
+            }
         }
+
+        var scores = [Double](repeating: -1, count: scenes.count)
+        var scored: [Double] = []
+        for i in indices {
+            let midpoint = (scenes[i].start + scenes[i].end) / 2
+            guard let image = try? await cgImage(generator, atSeconds: midpoint) else { continue }
+            // Release each frame's Vision/Core Graphics memory before the next —
+            // essential when a batch has dozens of clips.
+            let value = autoreleasepool { contentScore(for: image) }
+            scores[i] = value
+            scored.append(value)
+        }
+
+        // Fill any unscored scenes with the average so they aren't unfairly dropped.
+        let average = scored.isEmpty ? 0 : scored.reduce(0, +) / Double(scored.count)
+        for i in scores.indices where scores[i] < 0 { scores[i] = average }
         return scores
     }
 

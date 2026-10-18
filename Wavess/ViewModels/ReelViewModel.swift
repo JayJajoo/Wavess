@@ -507,12 +507,15 @@ final class ReelViewModel {
         // local energy (Auto) or the manual "cut every N beats", then nudged by
         // the shot's quality — great shots linger, filler cuts quick. Every cut
         // still lands on a beat.
+        // Each scene is used at most once — never repeat footage. If the distinct
+        // footage runs out before the section is full, the reel (and the music
+        // under it) simply end there rather than looping the same shots.
         var cuts: [Double] = [grid[0]]
         var chosen: [FlatScene] = []
         var cursor = 0
         var index = 0
-        while cursor < intervals {
-            let scene = pool[index % pool.count]
+        while cursor < intervals && index < pool.count {
+            let scene = pool[index]
             let norm = maxScore > 0 ? max(0, min(1, scene.score / maxScore)) : 0.5
             let baseline = autoPace ? autoBeats(atTime: grid[cursor]) : Double(max(1, beatsPerCut))
             let span = max(1, Int((baseline * (0.5 + norm)).rounded()))  // ~0.5x…1.5x baseline

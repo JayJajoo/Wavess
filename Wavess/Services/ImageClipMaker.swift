@@ -7,6 +7,10 @@ import UIKit
 /// analysed, Vision-scored, beat-synced and stitched like any other segment.
 enum ImageClipMaker {
 
+    /// Shared across photos — a CIContext is expensive to create, so reusing one
+    /// avoids a GPU-resource spike when converting many images in a batch.
+    private static let ciContext = CIContext()
+
     static func makeStillVideo(from imageURL: URL, seconds: Double = 3.0) async -> URL? {
         guard let image = UIImage(contentsOfFile: imageURL.path)?.uprightCGImage() else { return nil }
         let size = evenSize(for: image, maxDimension: 1280)
@@ -78,9 +82,9 @@ enum ImageClipMaker {
         let scaleX = size.width / CGFloat(image.width)
         let scaleY = size.height / CGFloat(image.height)
         let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
-        CIContext().render(scaled, to: buffer,
-                           bounds: CGRect(origin: .zero, size: size),
-                           colorSpace: CGColorSpaceCreateDeviceRGB())
+        ciContext.render(scaled, to: buffer,
+                         bounds: CGRect(origin: .zero, size: size),
+                         colorSpace: CGColorSpaceCreateDeviceRGB())
         return buffer
     }
 }
