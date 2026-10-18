@@ -42,10 +42,11 @@ struct VideoComposer {
         return composition
     }
 
-    /// Exports a composition to a temporary `.mp4`, reporting progress `0...1`.
-    func export(_ composition: AVComposition, onProgress: @escaping @Sendable (Float) -> Void) async throws -> URL {
+    /// Exports an asset (optionally driven by a video composition, e.g. for reel
+    /// transitions) to a temporary `.mp4`, reporting progress `0...1`.
+    func export(_ asset: AVAsset, videoComposition: AVVideoComposition? = nil, onProgress: @escaping @Sendable (Float) -> Void) async throws -> URL {
         guard let session = AVAssetExportSession(
-            asset: composition,
+            asset: asset,
             presetName: AVAssetExportPresetHighestQuality
         ) else {
             throw EditorError.exportSetupFailed
@@ -57,6 +58,9 @@ struct VideoComposer {
         session.outputURL = outputURL
         session.outputFileType = .mp4
         session.shouldOptimizeForNetworkUse = true
+        if let videoComposition {
+            session.videoComposition = videoComposition
+        }
 
         // Poll progress while the export runs.
         let progressTask = Task {

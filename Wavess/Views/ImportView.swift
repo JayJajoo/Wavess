@@ -1,48 +1,96 @@
 import SwiftUI
 
-/// The empty-state / landing screen inviting the user to pick a video.
+/// The home screen. Offers two entry points: edit a single clip, or build a
+/// reel from several clips.
 struct ImportView: View {
-    var onChoose: () -> Void
+    var onChooseSingle: () -> Void
+    var onChooseReel: () -> Void
 
     var body: some View {
-        VStack(spacing: 28) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: 28) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 60, weight: .light))
+                    .foregroundStyle(Color.accentColor)
+                    .symbolRenderingMode(.hierarchical)
+                    .padding(.top, 24)
 
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 64, weight: .light))
-                .foregroundStyle(Color.accentColor)
-                .symbolRenderingMode(.hierarchical)
+                VStack(spacing: 10) {
+                    Text("Intelligent video editing")
+                        .font(.title2.bold())
+                    Text("On-device, no accounts, no network. Wavess trims the dull stretches and stitches your best moments together.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
 
-            VStack(spacing: 10) {
-                Text("Intelligent video editing")
-                    .font(.title2.bold())
-                Text("Pick a clip and Wavess trims the dull stretches and finds your best moments — all on your device.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                VStack(spacing: 14) {
+                    ActionCard(
+                        icon: "sparkles.rectangle.stack",
+                        title: "Build a Reel",
+                        detail: "Combine several clips (e.g. drives & scenery) — Wavess picks the key scenes from each and stitches them with transitions.",
+                        prominent: true,
+                        action: onChooseReel
+                    )
+                    ActionCard(
+                        icon: "scissors",
+                        title: "Edit one clip",
+                        detail: "Trim still/boring stretches or pull the highlights out of a single video.",
+                        prominent: false,
+                        action: onChooseSingle
+                    )
+                }
+                .padding(.horizontal, 20)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    FeatureRow(icon: "car.fill", title: "Made for scenery & driving", detail: "Works on silent footage — no speech needed.")
+                    FeatureRow(icon: "wand.and.rays", title: "Selective transitions", detail: "Dissolves where clips meet, clean cuts elsewhere.")
+                    FeatureRow(icon: "lock.fill", title: "Fully on-device", detail: "No uploads, no accounts, no network.")
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 24)
             }
-
-            VStack(alignment: .leading, spacing: 14) {
-                FeatureRow(icon: "car.fill", title: "Trim still footage", detail: "Cuts static/stopped parts — great for scenery & driving. No speech needed.")
-                FeatureRow(icon: "film.stack", title: "Scene highlights", detail: "Detects the most dynamic shots and assembles a short cut.")
-                FeatureRow(icon: "lock.fill", title: "Fully on-device", detail: "No uploads, no accounts, no network.")
-            }
-            .padding(.horizontal, 32)
-
-            Spacer()
-
-            Button(action: onChoose) {
-                Label("Choose Video", systemImage: "photo.on.rectangle.angled")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
         }
+    }
+}
+
+private struct ActionCard: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let prominent: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(prominent ? Color.white : Color.accentColor)
+                    .frame(width: 40)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(prominent ? Color.white : Color.primary)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(prominent ? Color.white.opacity(0.9) : .secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(prominent ? Color.white.opacity(0.9) : .secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.ultraThinMaterial))
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -67,5 +115,5 @@ private struct FeatureRow: View {
 }
 
 #Preview {
-    ImportView(onChoose: {})
+    ImportView(onChooseSingle: {}, onChooseReel: {})
 }

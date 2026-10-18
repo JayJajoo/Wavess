@@ -7,7 +7,9 @@ import SwiftUI
 /// assembled and exported with AVFoundation. No network, no API keys.
 @main
 struct WavessApp: App {
-    var body: some Scene {
+    // Qualified as SwiftUI.Scene because this module also declares a `Scene`
+    // model type (a detected video scene), which would otherwise shadow it.
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView()
         }

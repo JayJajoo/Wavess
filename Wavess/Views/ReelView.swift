@@ -1,0 +1,262 @@
+import SwiftUI
+
+/// The reel-builder screen: shows each imported clip's key scenes, transition
+/// controls, and export. Stitches key scenes from multiple videos into one reel.
+struct ReelView: View {
+    @Bindable var model: ReelViewModel
+
+    @State private var showShareSheet = false
+    @State private var showSavedConfirmation = false
+    @State private var isSaving = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if model.phase == .analyzing {
+                    analyzingCard
+                } else if !model.clips.isEmpty {
+                    statsCard
+                    transitionCard
+
+                    ForEach(model.clips) { clip in
+                        clipCard(clip)
+                    }
+
+                    exportArea
+
+                    if model.phase == .done, let url = model.resultURL {
+                        resultCard(url: url)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 32)
+        }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { model.errorMessage != nil },
+            set: { if !$0 { model.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { model.errorMessage = nil }
+        } message: {
+            Text(model.errorMessage ?? "")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = model.resultURL {
+                ShareSheet(items: [url])
+            }
+        }
+    }
+
+    // MARK: - Analyzing
+
+    private var analyzingCard: some View {
+        VStack(spacing: 12) {
+            ProgressView(value: model.progress)
+                .tint(.accentColor)
+            Text(model.statusMessage.isEmpty ? "Analyzing…" : model.statusMessage)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Stats
+
+    private var statsCard: some View {
+        HStack {
+            stat(title: "Clips", value: "\(model.clips.count)")
+            Divider().frame(height: 34)
+            stat(title: "Key scenes", value: "\(model.totalSelectedScenes)")
+            Divider().frame(height: 34)
+            stat(title: "Reel length", value: "~\(Formatting.timecode(model.estimatedDuration))", highlight: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func stat(title: String, value: String, highlight: Bool = false) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(highlight ? Color.accentColor : .primary)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Transitions
+
+    private var transitionCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Transitions").font(.subheadline.weight(.semibold))
+
+            Picker("Style", selection: $model.transition.style) {
+                ForEach(TransitionSettings.Style.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("When", selection: $model.transition.frequency) {
+                ForEach(TransitionSettings.Frequency.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .disabled(model.transition.style == .none)
+
+            LabeledSlider(
+                title: "Transition length",
+                value: $model.transition.duration,
+                range: 0.2 ... 1.5,
+                step: 0.1,
+                display: String(format: "%.1fs", model.transition.duration),
+                onCommit: nil
+            )
+            .disabled(model.transition.style == .none)
+
+            Divider()
+
+            LabeledSlider(
+                title: "Key scenes per clip",
+                value: $model.transition.perClipFraction,
+                range: 0.1 ... 0.8,
+                step: 0.05,
+                display: "\(Int(model.transition.perClipFraction * 100))%",
+                onCommit: { model.reselectKeyScenes() }
+            )
+
+            Text(transitionHint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var transitionHint: String {
+        if model.transition.style == .none {
+            return "Scenes are joined with hard cuts."
+        }
+        switch model.transition.frequency {
+        case .betweenClips: return "A dissolve is added only where one clip hands off to the next — not at every cut."
+        case .everyScene:   return "A dissolve is added at every scene change."
+        }
+    }
+
+    // MARK: - Clips
+
+    private func clipCard(_ clip: ReelClip) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            DisclosureGroup {
+                VStack(spacing: 2) {
+                    ForEach(clip.scenes) { scene in
+                        SceneRow(scene: scene) {
+                            model.toggleScene(clipID: clip.id, sceneID: scene.id)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "film")
+                        .foregroundStyle(Color.accentColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(clip.fileName)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Text("\(Formatting.timecode(clip.duration)) · \(clip.selectedCount)/\(clip.scenes.count) key scenes")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - Export
+
+    private var exportArea: some View {
+        VStack(spacing: 8) {
+            if model.phase == .exporting {
+                ProgressView(value: model.progress) {
+                    Text(model.statusMessage.isEmpty ? "Rendering…" : model.statusMessage)
+                        .font(.subheadline)
+                }
+                .tint(.accentColor)
+            } else {
+                Button {
+                    Task { await model.export() }
+                } label: {
+                    Label(model.phase == .done ? "Re-export reel" : "Build reel", systemImage: "sparkles.rectangle.stack")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!model.canExport)
+            }
+
+            Text("Reels export without audio — add music in Photos or your editor.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Result
+
+    private func resultCard(url: URL) -> some View {
+        VStack(spacing: 14) {
+            Label("Your reel is ready", systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.green)
+
+            PlayerCard(url: url)
+
+            HStack(spacing: 12) {
+                Button {
+                    Task {
+                        isSaving = true
+                        let ok = await model.saveResultToPhotos()
+                        isSaving = false
+                        if ok { showSavedConfirmation = true }
+                    }
+                } label: {
+                    if isSaving {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else {
+                        Label("Save to Photos", systemImage: "photo.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSaving)
+
+                Button {
+                    showShareSheet = true
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+            .controlSize(.large)
+
+            if showSavedConfirmation {
+                Text("Saved to Photos ✓")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}

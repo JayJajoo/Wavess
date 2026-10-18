@@ -1,16 +1,23 @@
 # Wavess — Intelligent Video Editor for iPhone
 
 An on-device, SwiftUI + AVFoundation iPhone app that automatically tightens and
-highlights your videos. Point it at a clip and it will:
+stitches your videos. Two flows:
 
-- 🚗 **Trim still footage** — watch the frame for stretches where almost nothing
-  changes (a stopped car, a long static hold) and cut them out, keeping the parts
-  where the view is actually moving. **No speech required** — ideal for scenery,
-  driving, and b-roll.
-- 🎬 **Find highlights** — detect scene/shot changes, score each scene by how much
-  is happening, and auto-assemble a shorter "best of" cut you can tweak.
-- 🔇 **Remove silence** — for *talking* videos: analyze the audio track and cut the
-  quiet gaps, keeping the speech.
+**🎞️ Build a Reel (multiple clips)**
+- Import several videos (e.g. 3–5 min scenery/driving clips).
+- Wavess analyzes each on-device, detects scenes, and picks the **key scenes** from
+  every clip.
+- Stitches them into one reel with **cross-dissolve transitions applied
+  selectively** — by default only where one clip hands off to the next, not at
+  every cut.
+- Exports one combined video (video-only — montages get music added afterward).
+
+**✂️ Edit one clip**
+- 🚗 **Trim still footage** — cut stretches where almost nothing changes (a stopped
+  car, a static hold), keeping where the view is actually moving. **No speech
+  required** — ideal for scenery, driving, and b-roll.
+- 🎬 **Highlights** — detect scenes, score them, and auto-assemble a shorter cut.
+- 🔇 **Remove silence** — for *talking* videos: cut the quiet gaps, keep the speech.
 
 Everything runs **locally on the phone** — no network, no accounts, no API keys,
 and no FFmpeg. It uses only Apple frameworks (AVFoundation, AVKit, CoreMedia,
@@ -61,17 +68,26 @@ open Wavess.xcodeproj
 
 ## How to use
 
-1. Tap **Choose Video** and pick a clip.
-2. Wavess analyzes it on-device (one frame-sampling pass + an audio pass) and
-   shows a timeline of what it will keep (accent) vs. cut (dim).
+### Build a Reel
+
+1. On the home screen tap **Build a Reel** and select several videos.
+2. Wavess analyzes each clip and auto-picks its key scenes. Expand any clip to
+   toggle individual scenes on/off.
+3. Set the **transitions**: style (dissolve / hard cut), when they apply
+   (*between clips* — the default — or *every scene*), the transition length, and
+   how much of each clip to keep (**key scenes per clip**).
+4. Tap **Build reel**, then **Save to Photos** or **Share**.
+
+### Edit one clip
+
+1. On the home screen tap **Edit one clip** and pick a video.
+2. Wavess analyzes it (one frame-sampling pass + an audio pass) and shows a
+   timeline of what it will keep (accent) vs. cut (dim).
 3. Pick a mode:
-   - **Still** — removes the static/stopped stretches. Tune the stillness
-     threshold and minimum still length. *This is the one for silent scenery /
-     driving footage.*
-   - **Highlights** — builds a short cut from the most dynamic scenes. Tune the
-     target length and scene sensitivity, and toggle individual scenes on/off.
-   - **Silence** — removes quiet gaps (talking videos). Flags clips that have no
-     audio.
+   - **Still** — removes static/stopped stretches. *This is the one for silent
+     scenery / driving footage.*
+   - **Highlights** — builds a short cut from the most dynamic scenes.
+   - **Silence** — removes quiet gaps (talking videos); flags clips with no audio.
 4. Tap **Export edit**, then **Save to Photos** or **Share**.
 
 Slider tweaks recompute instantly from the cached frame sample — no re-scan.
@@ -85,7 +101,8 @@ Slider tweaks recompute instantly from the cached frame sample — no re-scan.
 | Scene detection | Big frame-to-frame differences mark cuts; the spans between become scenes | `Services/SceneDetector.swift` |
 | Highlight scoring | Score each scene by average visual change × length; auto-select the top scenes to hit a target duration | `Services/SceneDetector.swift`, `ViewModels/EditorViewModel.swift` |
 | Silence detection | Decode audio to mono 16 kHz PCM, compute per-window RMS → dBFS, threshold into silent ranges | `Services/SilenceDetector.swift` |
-| Assembly & export | Build an `AVMutableComposition` of the kept ranges, preserve orientation, export `.mp4` via `AVAssetExportSession` | `Services/VideoComposer.swift` |
+| Reel + transitions | Flatten key scenes across clips; alternate two video tracks, overlap selectively, ramp opacity for cross-dissolves, fit each source into a common render size | `Services/ReelBuilder.swift` |
+| Assembly & export | Build an `AVMutableComposition` (+ `AVVideoComposition` for reels), preserve orientation, export `.mp4` via `AVAssetExportSession` | `Services/VideoComposer.swift` |
 
 ### Project layout
 
@@ -94,22 +111,29 @@ Wavess/
 ├── WavessApp.swift            App entry point
 ├── Models/
 │   ├── AnalysisSettings.swift Tunable thresholds (exposed as sliders)
-│   └── Scene.swift            Scene model + error types
+│   ├── Scene.swift            Scene model + error types
+│   ├── ReelClip.swift         One source clip in a reel + its scenes
+│   └── TransitionSettings.swift  Transition style / frequency / length
 ├── Services/
 │   ├── FrameSampler.swift     Shared frame sampling + motion signal
 │   ├── MotionAnalyzer.swift   Still / low-motion detection (visual)
 │   ├── SceneDetector.swift    Scene detection + highlight scoring
 │   ├── SilenceDetector.swift  Audio RMS/dB silence analysis
+│   ├── ReelBuilder.swift      Multi-clip stitch + cross-dissolve transitions
 │   ├── VideoComposer.swift    Composition assembly + export
 │   └── PhotoSaver.swift       Save result to the photo library
 ├── ViewModels/
-│   └── EditorViewModel.swift  Orchestrates analysis, selection, export
+│   ├── EditorViewModel.swift  Single-clip: analysis, selection, export
+│   └── ReelViewModel.swift    Reel: per-clip analysis, key scenes, export
 ├── Views/
-│   ├── ContentView.swift      Root (import ↔ editor)
-│   ├── ImportView.swift       Landing / empty state
-│   ├── EditorView.swift       Preview, controls, timeline, export, result
+│   ├── ContentView.swift      Root + home routing (editor ↔ reel)
+│   ├── ImportView.swift       Home screen (two entry points)
+│   ├── EditorView.swift       Single-clip editor
+│   ├── ReelView.swift         Reel builder (clips, transitions, export)
 │   ├── TimelineView.swift     Visual keep/cut timeline
-│   ├── VideoPicker.swift      PHPicker bridge → local file URL
+│   ├── SharedComponents.swift PlayerCard, LabeledSlider, SceneRow, ScoreBar
+│   ├── VideoPicker.swift      PHPicker bridge → one local file URL
+│   ├── MultiVideoPicker.swift PHPicker bridge → multiple file URLs
 │   └── ShareSheet.swift       UIActivityViewController bridge
 └── Utilities/
     ├── TimeRangeMath.swift    Invert / merge / pad CMTimeRanges
