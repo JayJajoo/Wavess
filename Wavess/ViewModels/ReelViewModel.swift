@@ -68,7 +68,7 @@ final class ReelViewModel {
 
     /// Valid range for the "music section length" slider for the loaded track.
     var minMusicSectionDuration: Double { min(30, musicFullDuration) }
-    var maxMusicSectionDuration: Double { min(120, musicFullDuration) }
+    var maxMusicSectionDuration: Double { musicFullDuration }
     var maxMusicStart: Double { max(0, musicFullDuration - musicSectionDuration) }
 
     /// The chosen section expressed as an end time (start + length). Backs the
@@ -672,30 +672,41 @@ final class ReelViewModel {
         return spans
     }
 
-    /// Blends Vision content scores (0...1) with the motion-based scene scores so
-    /// selection is led by visual quality but still rewards dynamic, longer shots.
-    /// If Vision produced nothing (older OS or a failure), scores are left as-is.
+    /// Blends Vision content scores (0...1) with the motion-based scene scores.
+    /// Selection is led strongly by visual quality (so a calm, beautiful shot
+    /// beats a busy-but-plain one); motion is only a light nudge so the busiest
+    /// stretches don't dominate. If Vision produced nothing, scores are left as-is.
     private func applyContentScores(_ scenes: inout [Scene], content: [Double]) {
         guard scenes.count == content.count,
               let maxContent = content.max(), maxContent > 0.0001 else { return }
         let maxMotion = scenes.map(\.score).max() ?? 0
         for i in scenes.indices {
             let motion = maxMotion > 0 ? scenes[i].score / maxMotion : 0   // 0...1, duration-aware
-            scenes[i].score = 0.6 * content[i] + 0.4 * motion
+            scenes[i].score = 0.85 * content[i] + 0.15 * motion
         }
     }
 
     private func selectKeyScenes(_ scenes: inout [Scene], duration: Double, fraction: Double) {
         guard !scenes.isEmpty else { return }
-        let target = duration * fraction
-        let ranked = scenes.enumerated().sorted { $0.element.score > $1.element.score }
+        let n = scenes.count
+        // How many scenes to keep (a fraction of the candidates), at least one.
+        let keep = max(1, Int((Double(n) * fraction).rounded()))
 
-        var accumulated = 0.0
         var chosen = Set<Int>()
-        for (index, scene) in ranked {
-            if accumulated >= target && !chosen.isEmpty { break }
-            chosen.insert(index)
-            accumulated += scene.duration
+        if keep >= n {
+            chosen = Set(scenes.indices)
+        } else {
+            // Spread the picks across the clip's timeline so calm stretches are
+            // represented too — divide into `keep` time buckets and take the
+            // best-looking scene from each (not just the busiest region).
+            for b in 0..<keep {
+                let lo = b * n / keep
+                let hi = max(lo + 1, (b + 1) * n / keep)
+                let bucket = lo..<min(hi, n)
+                if let best = bucket.max(by: { scenes[$0].score < scenes[$1].score }) {
+                    chosen.insert(best)
+                }
+            }
         }
 
         for index in scenes.indices {
