@@ -40,8 +40,10 @@ struct FrameSampler {
 
             generator.generateCGImagesAsynchronously(forTimes: times.map { NSValue(time: $0) }) { requested, image, _, result, _ in
                 var signature: [UInt8]? = nil
-                if result == .succeeded, let image {
-                    signature = image.grayscaleSignature()
+                autoreleasepool {
+                    if result == .succeeded, let image {
+                        signature = image.grayscaleSignature()
+                    }
                 }
 
                 lock.lock()

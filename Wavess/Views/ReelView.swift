@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 /// The reel-builder screen: shows each imported clip's key scenes, transition
 /// controls, and export. Stitches key scenes from multiple videos into one reel.
@@ -9,6 +10,7 @@ struct ReelView: View {
     @State private var showSavedConfirmation = false
     @State private var isSaving = false
     @State private var showAudioPicker = false
+    @State private var playingClip: ReelClip?
 
     var body: some View {
         ScrollView {
@@ -30,6 +32,8 @@ struct ReelView: View {
                     if model.phase == .done, let url = model.resultURL {
                         resultCard(url: url)
                     }
+                } else {
+                    emptyClipsCard
                 }
             }
             .padding(.horizontal)
@@ -60,6 +64,24 @@ struct ReelView: View {
                 ShareSheet(items: [url])
             }
         }
+        .sheet(item: $playingClip) { clip in
+            ClipPlayer(url: clip.url)
+        }
+    }
+
+    private var emptyClipsCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "film.stack")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No clips in this reel")
+                .font(.headline)
+            Text("Tap Home to add videos and photos.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     // MARK: - Analyzing
@@ -144,33 +166,29 @@ struct ReelView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if model.maxMusicStart > 0 {
-                    LabeledSlider(
-                        title: "Start time",
-                        value: $model.musicStart,
-                        range: 0 ... model.maxMusicStart,
-                        step: 1,
-                        display: Formatting.timecode(model.musicStart),
-                        onCommit: { Task { await model.analyzeMusicSection() } }
-                    )
-                }
-                if model.maxMusicEnd > model.minMusicEnd {
-                    LabeledSlider(
-                        title: "End time",
-                        value: $model.musicEnd,
-                        range: model.minMusicEnd ... model.maxMusicEnd,
-                        step: 1,
-                        display: Formatting.timecode(model.musicEnd),
-                        onCommit: { Task { await model.analyzeMusicSection() } }
-                    )
-                }
+                // Instagram-style trimmer: crop the start→end window on the song's
+                // waveform and preview just that part.
+                MusicTrimmer(model: model)
 
-                Picker("Cut every", selection: $model.beatsPerCut) {
-                    Text("1 beat").tag(1)
-                    Text("2 beats").tag(2)
-                    Text("4 beats").tag(4)
+                Picker("Cut pace", selection: Binding<Int>(
+                    get: { model.autoPace ? 0 : model.beatsPerCut },
+                    set: {
+                        if $0 == 0 { model.autoPace = true }
+                        else { model.autoPace = false; model.beatsPerCut = $0 }
+                    }
+                )) {
+                    Text("Auto").tag(0)
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                    Text("4").tag(4)
                 }
                 .pickerStyle(.segmented)
+
+                Text(model.autoPace
+                     ? "Cut pace follows the song — fast cuts in the energetic parts, longer holds in the calm parts."
+                     : "Cut every \(model.beatsPerCut) beat\(model.beatsPerCut == 1 ? "" : "s"). Lower = snappier, higher = calmer.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 Toggle("Speed ramps (slow-mo / fast-forward)", isOn: $model.speedEffectsEnabled)
                     .font(.subheadline)
@@ -211,11 +229,17 @@ struct ReelView: View {
             }
             .pickerStyle(.segmented)
 
+            if model.transition.style == .auto {
+                Text("Wavess picks the transition for each cut from the beat and the scenes — punchy cuts on strong beats, smooth blends between clips.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Picker("When", selection: $model.transition.frequency) {
                 ForEach(TransitionSettings.Frequency.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            .disabled(model.transition.style == .none)
+            .disabled(model.transition.style == .none || model.transition.style == .auto)
 
             LabeledSlider(
                 title: "Transition length",
@@ -260,7 +284,51 @@ struct ReelView: View {
     // MARK: - Clips
 
     private func clipCard(_ clip: ReelClip) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Button { playingClip = clip } label: {
+                    ZStack {
+                        if let thumb = clip.thumbnail {
+                            Image(uiImage: thumb)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Rectangle().fill(Color.secondary.opacity(0.2))
+                        }
+                        Image(systemName: "play.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .shadow(radius: 2)
+                    }
+                    .frame(width: 54, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(clip.fileName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(Formatting.timecode(clip.duration)) · \(clip.selectedCount)/\(clip.scenes.count) key scenes")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Tap to play")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(role: .destructive) {
+                    model.removeClip(clipID: clip.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+            }
+
             DisclosureGroup {
                 VStack(spacing: 2) {
                     ForEach(clip.scenes) { scene in
@@ -272,18 +340,9 @@ struct ReelView: View {
                 }
                 .padding(.top, 6)
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "film")
-                        .foregroundStyle(Color.accentColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(clip.fileName)
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                        Text("\(Formatting.timecode(clip.duration)) · \(clip.selectedCount)/\(clip.scenes.count) key scenes")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text("Key scenes")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 8) {
@@ -385,5 +444,21 @@ struct ReelView: View {
         .padding()
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+/// Full-screen player used to preview a source clip (or photo still) from the list.
+private struct ClipPlayer: View {
+    let url: URL
+    @State private var player = AVPlayer()
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .ignoresSafeArea()
+            .onAppear {
+                player.replaceCurrentItem(with: AVPlayerItem(url: url))
+                player.play()
+            }
+            .onDisappear { player.pause() }
     }
 }

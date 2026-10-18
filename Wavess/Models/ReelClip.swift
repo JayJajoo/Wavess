@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UIKit
 
 /// One source video in a reel, with its detected scenes and which of them are
 /// currently selected as key scenes.
@@ -9,6 +10,9 @@ struct ReelClip: Identifiable {
     let asset: AVURLAsset
     let duration: Double
     var scenes: [Scene]
+
+    /// Poster frame shown in the clip list.
+    var thumbnail: UIImage? = nil
 
     /// Per-clip color look override. `nil` means "use the reel-wide look".
     var look: Look? = nil

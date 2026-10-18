@@ -36,12 +36,13 @@ struct MusicReelBuilder {
     func build(
         cutTimes: [Double],
         slots: [MusicSlot],
-        transitionIntoNext: [Bool],
+        boundaryTransitions: [ReelTransition?],
         transitionDuration: Double,
-        transition: ReelTransition = .crossDissolve,
-        music: (asset: AVURLAsset, start: Double)
+        music: (asset: AVURLAsset, start: Double, section: Double)
     ) async throws -> (composition: AVComposition, videoComposition: AVVideoComposition, audioMix: AVAudioMix?) {
-        guard slots.count >= 1, cutTimes.count == slots.count + 1 else {
+        guard slots.count >= 1,
+              cutTimes.count == slots.count + 1,
+              boundaryTransitions.count == slots.count else {
             throw EditorError.nothingToExport
         }
 
@@ -72,8 +73,13 @@ struct MusicReelBuilder {
         let dissolve = max(0, min(transitionDuration, 0.8 * minSlot))
         let half = dissolve / 2
 
-        func leftExt(_ j: Int) -> Double { (j > 0 && transitionIntoNext[j - 1] && dissolve > 0) ? half : 0 }
-        func rightExt(_ j: Int) -> Double { (j < slots.count - 1 && transitionIntoNext[j] && dissolve > 0) ? half : 0 }
+        // A boundary carries a transition when it has a chosen effect, isn't the
+        // last slot, and the dissolve has room.
+        func hasTransition(_ j: Int) -> Bool {
+            j >= 0 && j < slots.count - 1 && boundaryTransitions[j] != nil && dissolve > 0
+        }
+        func leftExt(_ j: Int) -> Double { (j > 0 && hasTransition(j - 1)) ? half : 0 }
+        func rightExt(_ j: Int) -> Double { hasTransition(j) ? half : 0 }
 
         let composition = AVMutableComposition()
         guard
@@ -130,8 +136,17 @@ struct MusicReelBuilder {
         var audioMix: AVAudioMix? = nil
         if let musicTrack = try await music.asset.loadTracks(withMediaType: .audio).first,
            let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-            let musicRange = CMTimeRange(start: TimeRangeMath.time(music.start), duration: TimeRangeMath.time(total))
-            try audioTrack.insertTimeRange(musicRange, of: musicTrack, at: .zero)
+            // The reel can run longer than the chosen section (when there are more
+            // scenes than fit once), so loop that section to cover the whole reel.
+            let musicDuration = (try? await music.asset.load(.duration))?.seconds ?? music.section
+            let sectionDuration = max(0.1, min(music.section, musicDuration - music.start))
+            var position = 0.0
+            while position < total - 0.001 {
+                let chunk = min(sectionDuration, total - position)
+                let srcRange = CMTimeRange(start: TimeRangeMath.time(music.start), duration: TimeRangeMath.time(chunk))
+                try audioTrack.insertTimeRange(srcRange, of: musicTrack, at: TimeRangeMath.time(position))
+                position += chunk
+            }
 
             let params = AVMutableAudioMixInputParameters(track: audioTrack)
             let fade = min(1.0, total * 0.1)
@@ -161,10 +176,9 @@ struct MusicReelBuilder {
         // Ordered segments with their end boundary.
         var plan: [(segment: Segment, end: CMTime)] = []
         for j in slots.indices {
-            let hasTransition = j < slots.count - 1 && transitionIntoNext[j] && dissolve > 0
-            let soloEnd = hasTransition ? cutTimes[j + 1] - half : cutTimes[j + 1]
+            let soloEnd = hasTransition(j) ? cutTimes[j + 1] - half : cutTimes[j + 1]
             plan.append((.solo(slot: j), TimeRangeMath.time(soloEnd)))
-            if hasTransition {
+            if hasTransition(j) {
                 plan.append((.transition(from: j), TimeRangeMath.time(cutTimes[j + 1] + half)))
             }
         }
@@ -193,7 +207,7 @@ struct MusicReelBuilder {
                 let fromLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[j % 2])
                 let toLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: tracks[(j + 1) % 2])
                 TransitionCompositor.apply(
-                    transition,
+                    boundaryTransitions[j] ?? .crossDissolve,
                     from: fromLayer, to: toLayer,
                     fromTransform: transforms[j], toTransform: transforms[j + 1],
                     range: range, renderSize: renderSize

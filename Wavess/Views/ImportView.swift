@@ -27,7 +27,7 @@ struct ImportView: View {
                     ActionCard(
                         icon: "sparkles.rectangle.stack",
                         title: "Build a Reel",
-                        detail: "Pick several clips in the order you want them — Wavess finds the key scenes, syncs the cuts to your music, and stitches it all with transitions.",
+                        detail: "Pick videos and photos in the order you want them — Wavess finds the key scenes, syncs the cuts to your music, and stitches it all with transitions.",
                         prominent: true,
                         action: onChooseReel
                     )
