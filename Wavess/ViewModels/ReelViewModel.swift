@@ -251,7 +251,7 @@ final class ReelViewModel {
                 slots: plan.slots,
                 boundaryTransitions: plan.transitions,
                 transitionDuration: transition.style == .none ? 0 : transition.duration,
-                music: (musicAsset, musicStart)
+                music: (musicAsset, musicStart, musicSectionDuration)
             )
             let url = try await VideoComposer().export(composition, videoComposition: videoComposition, audioMix: audioMix) { [weak self] value in
                 Task { @MainActor in self?.progress = Double(value) }
@@ -444,45 +444,33 @@ final class ReelViewModel {
 
     // MARK: - Music plan
 
-    /// Scene pool for the music plan: the user's selected key scenes, topped up
-    /// with the best remaining scenes (across all clips, highest score first)
-    /// when there are more beat slots than selected scenes — so a long clip
-    /// fills the song with distinct footage instead of repeating a handful.
-    private func makeMusicPool(slotCount: Int) -> [FlatScene] {
-        let selected = makeFlat()
-        guard selected.count < slotCount else { return selected }
-
-        var extras: [FlatScene] = []
-        for (clipIndex, clip) in clips.enumerated() {
-            for scene in clip.scenes where !scene.isSelected {
-                extras.append(FlatScene(asset: clip.asset, range: scene.range, clipIndex: clipIndex, start: scene.start, score: scene.score))
-            }
-        }
-        extras.sort { $0.score > $1.score }
-
-        var pool = selected + Array(extras.prefix(slotCount - selected.count))
-        pool.sort { ($0.clipIndex, $0.start) < ($1.clipIndex, $1.start) }
-        return pool
-    }
-
     func makeMusicPlan() -> MusicPlan? {
         guard let analysis = musicAnalysis else { return nil }
-        let total = musicSectionDuration
+        let section = musicSectionDuration
+        guard section > 0.5 else { return nil }
 
-        // The beat grid we can cut on: 0, every internal beat, then the section end.
-        let internalBeats = analysis.beats.filter { $0 > 0.15 && $0 < total - 0.15 }
-        let grid = Array(Set([0] + internalBeats + [total])).sorted()
-        let intervals = grid.count - 1
-        guard intervals >= 1 else { return nil }
-
-        // One distinct scene per beat interval where possible (long clips fill the
-        // song with varied footage rather than repeating a handful).
-        let pool = makeMusicPool(slotCount: intervals)
+        // Every selected scene, in selection/timeline order, used exactly once —
+        // nothing repeated, nothing skipped. The reel grows (and the music loops
+        // under it) to fit them all, instead of being capped to the music section.
+        let pool = makeFlat()
         guard !pool.isEmpty else { return nil }
         let maxScore = pool.map(\.score).max() ?? 0
 
-        // Music energy envelope (smoothed onset strength) for Auto pacing:
-        // intense sections cut fast, calm sections hold longer.
+        // One loop's worth of beat cut-points within the chosen section.
+        let internalBeats = analysis.beats.filter { $0 > 0.15 && $0 < section - 0.15 }.sorted()
+        let baseGrid = Array(Set([0] + internalBeats + [section])).sorted()
+        let baseIntervals = baseGrid.count - 1
+        guard baseIntervals >= 1 else { return nil }
+
+        // A cut-point time for any global interval index: the section's beat grid
+        // tiled forward (the music loops every `section`, so the beats line up).
+        func gridTime(_ g: Int) -> Double {
+            let loop = g / baseIntervals
+            let within = g % baseIntervals
+            return baseGrid[within] + Double(loop) * section
+        }
+
+        // Smoothed energy envelope for Auto pacing (per loop).
         let smoothed: [Double] = analysis.beatStrengths.indices.map { i in
             let lo = max(0, i - 2)
             let hi = min(analysis.beatStrengths.count - 1, i + 2)
@@ -491,7 +479,7 @@ final class ReelViewModel {
         }
         let minEnergy = smoothed.min() ?? 0
         let maxEnergy = smoothed.max() ?? 1
-        func autoBeats(atTime t: Double) -> Double {
+        func autoBeats(sectionTime t: Double) -> Double {
             guard !smoothed.isEmpty, maxEnergy > minEnergy else { return 2 }
             var nearest = 0
             var nearestDelta = Double.greatestFiniteMagnitude
@@ -499,48 +487,40 @@ final class ReelViewModel {
                 let delta = abs(beat - t)
                 if delta < nearestDelta { nearestDelta = delta; nearest = i }
             }
-            let energyNorm = (smoothed[nearest] - minEnergy) / (maxEnergy - minEnergy)  // 0…1
-            return 1 + (1 - energyNorm) * 3                                             // 1 (intense) … 4 (calm)
+            let energyNorm = (smoothed[nearest] - minEnergy) / (maxEnergy - minEnergy)
+            return 1 + (1 - energyNorm) * 3
         }
 
-        // Walk the grid, giving each scene a beat span driven by the music's
-        // local energy (Auto) or the manual "cut every N beats", then nudged by
-        // the shot's quality — great shots linger, filler cuts quick. Every cut
-        // still lands on a beat.
-        // Each scene is used at most once — never repeat footage. If the distinct
-        // footage runs out before the section is full, the reel (and the music
-        // under it) simply end there rather than looping the same shots.
-        var cuts: [Double] = [grid[0]]
+        // Place EVERY scene, each once: give it a beat span from the music's
+        // energy (Auto) or the manual pace, nudged by the shot's quality.
+        var cuts: [Double] = [0]
         var chosen: [FlatScene] = []
         var cursor = 0
-        var index = 0
-        while cursor < intervals && index < pool.count {
-            let scene = pool[index]
-            let norm = maxScore > 0 ? max(0, min(1, scene.score / maxScore)) : 0.5
-            let baseline = autoPace ? autoBeats(atTime: grid[cursor]) : Double(max(1, beatsPerCut))
-            let span = max(1, Int((baseline * (0.5 + norm)).rounded()))  // ~0.5x…1.5x baseline
-            var next = min(cursor + span, intervals)
-            while next < intervals && grid[next] - grid[cursor] < 0.5 { next += 1 }   // keep slots ≥ 0.5s
-            if next < intervals && grid[intervals] - grid[next] < 0.5 { next = intervals }  // no tiny tail
-            cuts.append(grid[next])
-            chosen.append(scene)
+        for item in pool {
+            let norm = maxScore > 0 ? max(0, min(1, item.score / maxScore)) : 0.5
+            let sectionTime = gridTime(cursor).truncatingRemainder(dividingBy: section)
+            let baseline = autoPace ? autoBeats(sectionTime: sectionTime) : Double(max(1, beatsPerCut))
+            let span = max(1, Int((baseline * (0.5 + norm)).rounded()))
+            var next = cursor + span
+            while gridTime(next) - gridTime(cursor) < 0.5 { next += 1 }  // keep slots ≥ 0.5s
+            cuts.append(gridTime(next))
+            chosen.append(item)
             cursor = next
-            index += 1
         }
-        guard !chosen.isEmpty, cuts.count == chosen.count + 1 else { return nil }
+        guard cuts.count == chosen.count + 1 else { return nil }
 
         var slots: [MusicSlot] = chosen.map {
             MusicSlot(asset: $0.asset, sourceStart: $0.start, clipIndex: $0.clipIndex)
         }
         let sceneScores: [Double] = chosen.map { maxScore > 0 ? max(0, min(1, $0.score / maxScore)) : 0.5 }
 
-        // Normalised beat strength at each internal boundary, for the transition
-        // and speed decisions below.
-        let boundaryStrength: [Double] = (0..<max(0, slots.count - 1)).map { analysis.strength(at: cuts[$0 + 1]) }
+        // Per-boundary transition (Auto analyses each stitch; fixed styles use the
+        // frequency rule; the last boundary is nil). Beat strength is read
+        // section-relative so it stays meaningful across loops.
+        let boundaryStrength: [Double] = (0..<max(0, slots.count - 1)).map {
+            analysis.strength(at: cuts[$0 + 1].truncatingRemainder(dividingBy: section))
+        }
         let maxStrength = boundaryStrength.max() ?? 0
-
-        // Per-boundary transition: Auto analyses each stitch; a fixed style uses
-        // the frequency rule; the last boundary is always nil.
         let transitions: [ReelTransition?] = (0..<slots.count).map { j in
             guard j < slots.count - 1 else { return nil }
             let crosses = slots[j + 1].clipIndex != slots[j].clipIndex
